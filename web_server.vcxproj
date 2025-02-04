@@ -1,0 +1,241 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <EnableUnitySupport>true</EnableUnitySupport>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ShowAllFiles>true</ShowAllFiles>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>build\</OutDir>
+    <IntDir>build\vs_intermediate\</IntDir>
+    <IncludePath>
+    </IncludePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>build\</OutDir>
+    <IntDir>build\vs_intermediate\</IntDir>
+    <IncludePath>
+    </IncludePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IncludePath>
+    </IncludePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+    <OutDir>build\</OutDir>
+    <IntDir>build\vs_intermediate\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>
+    </IncludePath>
+    <SourcePath>$(SourcePath)</SourcePath>
+    <OutDir>build\</OutDir>
+    <IntDir>build\vs_intermediate\</IntDir>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{44d3e888-b77c-4740-b1d3-a494668d562e}</ProjectGuid>
+    <RootNamespace>neoalbatross</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>web_server</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <CustomUnityFile>true</CustomUnityFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>$(CoreLibraryDependencies);dxguid.lib;ddraw.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <CustomUnityFile>true</CustomUnityFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;OS_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <CustomUnityFile>true</CustomUnityFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <CustomUnityFile>true</CustomUnityFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="source\start.c">
+      <IncludeInUnityFile>false</IncludeInUnityFile>
+    </ClCompile>
+    <ClCompile Include="source\app\magpie\magpie.c" />
+    <ClCompile Include="source\base\base_bits.c" />
+    <ClCompile Include="source\base\base_entry.c" />
+    <ClCompile Include="source\base\base_format.c" />
+    <ClCompile Include="source\base\base_hash.c" />
+    <ClCompile Include="source\base\base_include.c" />
+    <ClCompile Include="source\base\base_logging.c" />
+    <ClCompile Include="source\base\base_math.c" />
+    <ClCompile Include="source\base\base_memory.c" />
+    <ClCompile Include="source\base\base_os\base_os_include.c" />
+    <ClCompile Include="source\base\base_os\win32\base_win32_memory.c" />
+    <ClCompile Include="source\base\base_os\win32\base_win32_time.c" />
+    <ClCompile Include="source\base\base_string.c" />
+    <ClCompile Include="source\base\base_types.c" />
+    <ClCompile Include="source\io\io_basic.c" />
+    <ClCompile Include="source\io\io_file.c" />
+    <ClCompile Include="source\io\io_include.c" />
+    <ClCompile Include="source\io\io_os\io_os_include.c" />
+    <ClCompile Include="source\io\io_os\win32\io_win32_basic.c" />
+    <ClCompile Include="source\io\io_os\win32\io_win32_exe.c" />
+    <ClCompile Include="source\io\io_os\win32\io_win32_file.c" />
+    <ClCompile Include="source\network\network_include.c" />
+    <ClCompile Include="source\network\network_poll.c" />
+    <ClCompile Include="source\network\network_socket.c" />
+    <ClCompile Include="source\network\network_os\network_os_include.c" />
+    <ClCompile Include="source\network\network_os\win32\network_win32_internal.c" />
+    <ClCompile Include="source\network\network_os\win32\network_win32_poll.c" />
+    <ClCompile Include="source\network\network_os\win32\network_win32_socket.c" />
+    <ClCompile Include="source\platform\platform_include.c" />
+    <ClCompile Include="source\platform\platform_os\platform_os_include.c" />
+    <ClCompile Include="source\platform\platform_os\win32\platform_win32_window.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="source\app\magpie\magpie.h" />
+    <ClInclude Include="source\base\base_bits.h" />
+    <ClInclude Include="source\base\base_entry.h" />
+    <ClInclude Include="source\base\base_format.h" />
+    <ClInclude Include="source\base\base_hash.h" />
+    <ClInclude Include="source\base\base_include.h" />
+    <ClInclude Include="source\base\base_logging.h" />
+    <ClInclude Include="source\base\base_math.h" />
+    <ClInclude Include="source\base\base_memory.h" />
+    <ClInclude Include="source\base\base_os\base_os_memory.h" />
+    <ClInclude Include="source\base\base_os\base_os_include.h" />
+    <ClInclude Include="source\base\base_os\base_os_time.h" />
+    <ClInclude Include="source\base\base_string.h" />
+    <ClInclude Include="source\base\base_types.h" />
+    <ClInclude Include="source\base\base_util.h" />
+    <ClInclude Include="source\io\io_basic.h" />
+    <ClInclude Include="source\io\io_file.h" />
+    <ClInclude Include="source\io\io_include.h" />
+    <ClInclude Include="source\io\io_os\io_os_basic.h" />
+    <ClInclude Include="source\io\io_os\io_os_file.h" />
+    <ClInclude Include="source\io\io_os\io_os_include.h" />
+    <ClInclude Include="source\network\network_include.h" />
+    <ClInclude Include="source\network\network_poll.h" />
+    <ClInclude Include="source\network\network_socket.h" />
+    <ClInclude Include="source\network\network_os\network_os_include.h" />
+    <ClInclude Include="source\network\network_os\network_os_poll.h" />
+    <ClInclude Include="source\network\network_os\network_os_socket.h" />
+    <ClInclude Include="source\network\network_os\win32\network_win32_internal.h" />
+    <ClInclude Include="source\platform\platform_include.h" />
+    <ClInclude Include="source\platform\platform_os\platform_os_include.h" />
+    <ClInclude Include="source\platform\platform_os\win32\platform_win32_window.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
