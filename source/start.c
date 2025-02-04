@@ -2,11 +2,10 @@
 #include "io/io_include.h"
 #include "network/network_include.h"
 
+#include "app/web_server/web_server_include.h"
+
 #include "base/base_include.c"
 #include "io/io_include.c"
 #include "network/network_include.c"
 
-void EntryHook()
-{
-	StdOutputFmt("Hello, World!");
-}
+#include "app/web_server/web_server_include.c"

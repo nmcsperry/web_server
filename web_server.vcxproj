@@ -167,6 +167,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="source\app\web_server\http_server.c" />
+    <ClCompile Include="source\app\web_server\web_server.c" />
+    <ClCompile Include="source\app\web_server\web_server_include.c" />
     <ClCompile Include="source\start.c">
       <IncludeInUnityFile>false</IncludeInUnityFile>
     </ClCompile>
@@ -204,6 +207,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source\app\magpie\magpie.h" />
+    <ClInclude Include="source\app\web_server\http_server.h" />
+    <ClInclude Include="source\app\web_server\web_server.h" />
+    <ClInclude Include="source\app\web_server\web_server_include.h" />
     <ClInclude Include="source\base\base_bits.h" />
     <ClInclude Include="source\base\base_entry.h" />
     <ClInclude Include="source\base\base_format.h" />
