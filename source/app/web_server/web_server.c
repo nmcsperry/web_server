@@ -5,6 +5,27 @@
 
 void EntryHook()
 {
+	buffer_pool BufferPool = BufferPoolInit();
+	db_context Context = (db_context) { .BufferPool = &BufferPool };
+
+	page_header Header = { 0 };
+	Header.PageId = 0;
+	Header.PageType = PageType_Directory;
+	Header.ElementSize = sizeof(u32);
+	Header.ElementSize2 = sizeof(u32);
+	Header.ElementCount = 0;
+	Header.DirectoryPageId = 0;
+	Header.PreviousPageId = 0;
+	Header.NextPageId = 0;
+
+	u32 Test = 7;
+
+	page_ref DirectoryPage = PageNew(&Context, Header);
+	db_location Location = PageDirAppend(&Context, DirectoryPage.PageId, &Test, sizeof(u32));
+	
+	page_slot_temp Temp = PageLoadTemp(&Context, Location.PageId);
+	u32 * Value = PageGetTemp(Temp, Location.Index).Data;
+
 	SocketInit();
 
 	socket_handle Socket = SocketCreateServer(80, 50);
