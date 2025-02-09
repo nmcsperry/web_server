@@ -1,7 +1,7 @@
 *.sublime-workspace
 *.sublime-project
 *.10x
-build/
+build/*
 *.DS_Store
 *.rdbg
 *.vcxproj.user
