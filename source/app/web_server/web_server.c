@@ -18,13 +18,28 @@ void EntryHook()
 	Header.PreviousPageId = 0;
 	Header.NextPageId = 0;
 
-	u32 Test = 7;
+	page_slot * DirectoryPage = PageNew(&Context, Header);
+	u32 DirectoryPageId = DirectoryPage->Header.PageId;
 
-	page_ref DirectoryPage = PageNew(&Context, Header);
-	db_location Location = PageDirAppend(&Context, DirectoryPage.PageId, &Test, sizeof(u32));
-	
-	page_slot_temp Temp = PageLoadTemp(&Context, Location.PageId);
-	u32 * Value = PageGetTemp(Temp, Location.Index).Data;
+	bool8 Error = false;
+
+	db_location Location;
+	for (u32 I = 0; I < 2000000; I++)
+	{
+		Location = PageDirAppend(&Context, DirectoryPage, &I, sizeof(u32));
+		DBContextUnpin(&Context, DirectoryPage);
+
+		page_slot * LocationPage = PageLoad(&Context, Location.PageId);
+		u32 * Value = PageGet(LocationPage, Location.Index).Data;
+		DBContextUnpin(&Context, LocationPage);
+
+		if (I != *Value)
+		{
+			Error = true;
+		}
+	}
+
+	BufferPoolFlush(&BufferPool, false);
 
 	SocketInit();
 

@@ -11,6 +11,7 @@ buffer_pool BufferPoolInit()
 	for (int BufferIndex = 0; BufferIndex < BUFFER_POOL_SIZE; BufferIndex++)
 	{
 		Result.Pages[BufferIndex].Data = (u8 *) Result.Data + DB_PAGE_SIZE * BufferIndex;
+		Result.Pages[BufferIndex].PageBufferIndex = BufferIndex;
 	}
 
 	file_handle File = FileOpenInput("test.database");
@@ -37,19 +38,24 @@ bp_index BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId)
 	u64 LRUPageId = -1;
 	u64 LRULastAccessUSec = U64Max;
 
-	for (int BufferOffset = 0; BufferOffset < BUFFER_POOL_SIZE; BufferOffset++)
+	i32 NextScanIndex = BufferPool->ScanIndex;
+
+	for (i32 BufferOffset = 0; BufferOffset < BUFFER_POOL_SIZE; BufferOffset++)
 	{
-		int BufferIndex = (BufferOffset + BufferPool->ScanIndex) % BUFFER_POOL_SIZE;
+		i32 BufferIndex = (BufferOffset + BufferPool->ScanIndex) % BUFFER_POOL_SIZE;
 		page_slot * Page = &BufferPool->Pages[BufferIndex];
 
 		if (Page->Info.Valid && Page->Header.PageId == PageId)
 		{
-			return (bp_index) { BufferIndex, BPReplacement_AlreadyLoaded };
+			Candidate = BufferIndex;
+			ReplacementType = BPReplacement_AlreadyLoaded;
+
+			break;
 		}
 
 		if (ReplacementType < BPReplacement_Clock)
 		{
-			BufferPool->ScanIndex++;
+			NextScanIndex++;
 			if (!Page->Info.Used)
 			{
 				Candidate = BufferIndex;
@@ -80,6 +86,8 @@ bp_index BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId)
 		ReplacementType = BPReplacement_LRU;
 	}
 
+	BufferPool->ScanIndex = NextScanIndex % BUFFER_POOL_SIZE;
+
 	return (bp_index) { Candidate, ReplacementType };
 }
 
@@ -99,10 +107,8 @@ void BufferPoolEvict(buffer_pool * BufferPool, i32 BufferPoolIndex)
 	Page->Info.Valid = false;
 }
 
-void BufferPoolMarkAccess(buffer_pool * BufferPool, i32 BufferPoolIndex)
+void PageMarkAccess(page_slot * Page)
 {
-	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
-
 	if (Page->Info.Valid)
 	{
 		Page->Info.LastAccessUSec = UnixTimeUSec();
@@ -115,12 +121,15 @@ void BufferPoolSave(buffer_pool * BufferPool, i32 BufferPoolIndex)
 	file_handle File = FileOpenOutput("test.database", false);
 
 	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
-	PageSyncHeaderToData(Page);
+	if (Page->Info.Valid)
+	{
+		PageSyncHeaderToData(Page);
 
-	str8 Data = (str8) { .Data = Page->Data, .Count = DB_PAGE_SIZE };
-	FileOutputSegment(File, Data, Page->Header.PageId * DB_PAGE_SIZE);
+		str8 Data = (str8) { .Data = Page->Data, .Count = DB_PAGE_SIZE };
+		FileOutputSegment(File, Data, Page->Header.PageId * DB_PAGE_SIZE);
 
-	FileClose(File);
+		FileClose(File);
+	}
 }
 
 void BufferPoolLoad(buffer_pool * BufferPool, i32 BufferPoolIndex, u32 PageId)
@@ -130,9 +139,24 @@ void BufferPoolLoad(buffer_pool * BufferPool, i32 BufferPoolIndex, u32 PageId)
 	file_handle File = FileOpenInput("test.database");
 
 	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
-	FileInputSegmentToPtr(File, Page->Data, Page->Header.PageId * DB_PAGE_SIZE, DB_PAGE_SIZE);
+	FileInputSegmentToPtr(File, Page->Data, PageId * DB_PAGE_SIZE, DB_PAGE_SIZE);
 
 	FileClose(File);
+}
+
+void BufferPoolFlush(buffer_pool * BufferPool, bool32 Evict)
+{
+	for (int BufferIndex = 0; BufferIndex < BUFFER_POOL_SIZE; BufferIndex++)
+	{
+		if (Evict)
+		{
+			BufferPoolEvict(BufferPool, BufferIndex);
+		}
+		else
+		{
+			BufferPoolSave(BufferPool, BufferIndex);
+		}
+	}
 }
 
 db_context DBContextNew(db_context * Context)
@@ -142,17 +166,11 @@ db_context DBContextNew(db_context * Context)
 	return NewContext;
 }
 
-page_slot * DBContextPin(db_context * Context, page_slot_temp Page)
+page_slot * DBContextPin(db_context * Context, page_slot * Page)
 {
-	if (Page.Page->Header.PageId != Page.PageId)
-	{
-		return 0;
-	}
-
-	Page.Page->Info.Pins++;
-	Context->Pins[Page.Page->PageBufferIndex]++;
-
-	return Page.Page;
+	Page->Info.Pins++;
+	Context->Pins[Page->PageBufferIndex]++;
+	return Page;
 }
 
 void DBContextUnpin(db_context * Context, page_slot * Page)
@@ -170,7 +188,7 @@ void DBContextClose(db_context * Context)
 	}
 }
 
-page_slot_temp PageLoadTemp(db_context * Context, u32 PageId)
+page_slot * PageLoad(db_context * Context, u32 PageId)
 {
 	bp_index BufferPoolIndex = BufferPoolFindAvailableIndex(Context->BufferPool, PageId);
 	page_slot * Page = &Context->BufferPool->Pages[BufferPoolIndex.Index];
@@ -182,10 +200,10 @@ page_slot_temp PageLoadTemp(db_context * Context, u32 PageId)
 		PageInit(Page);
 	}
 
-	return PageTempFromPage(Page);
+	return DBContextPin(Context, Page);
 }
 
-page_slot_temp PageNewTemp(db_context * Context, page_header Header)
+page_slot * PageNew(db_context * Context, page_header Header)
 {
 	Header.PageId = Context->BufferPool->NextFreePageId;
 	Context->BufferPool->NextFreePageId++; // todo: when we delete pages, mark them as unused, reuse them, etc.
@@ -198,14 +216,13 @@ page_slot_temp PageNewTemp(db_context * Context, page_header Header)
 	PageSyncHeaderToData(Page);
 	PageInit(Page);
 
-	return PageTempFromPage(Page);
+	return DBContextPin(Context, Page);
 }
 
-db_location PageDirAppend(db_context * Context, u32 DirectoryPageId, void * Data, u32 SourceSize)
+db_location PageDirAppend(db_context * Context, page_slot * DirectoryPage, void * Data, u32 SourceSize)
 {
 	db_context TempContext = DBContextNew(Context);
 
-	page_slot * DirectoryPage = PageLoadPin(&TempContext, DirectoryPageId);
 	if (DirectoryPage->Header.PageType != PageType_Directory)
 	{
 		return DBLocationError();
@@ -218,7 +235,7 @@ db_location PageDirAppend(db_context * Context, u32 DirectoryPageId, void * Data
 	if (DirectoryPage->Header.ElementCount != 0)
 	{
 		LastPageId = *((u32 *) PageGet(DirectoryPage, DirectoryPage->Header.ElementCount).Data);
-		page_slot * LastPage = PageLoadPin(&TempContext, LastPageId);
+		page_slot * LastPage = PageLoad(&TempContext, LastPageId);
 
 		if (PageSpaceLeft(LastPage) > LastPage->Header.ElementSize)
 		{
@@ -233,16 +250,17 @@ db_location PageDirAppend(db_context * Context, u32 DirectoryPageId, void * Data
 		NewPageHeader.PageType = PageType_Elements;
 		NewPageHeader.ElementSize = DirectoryPage->Header.ElementSize2;
 		NewPageHeader.ElementCount = 0;
-		NewPageHeader.DirectoryPageId = DirectoryPageId;
+		NewPageHeader.DirectoryPageId = DirectoryPage->Header.PageId;
 		NewPageHeader.PreviousPageId = LastPageId;
 		NewPageHeader.NextPageId = 0;
 		NewPageHeader.ElementSize2 = 0;
 
-		page_slot * NewPage = PageNewPin(&TempContext, NewPageHeader);
+		page_slot * NewPage = PageNew(&TempContext, NewPageHeader);
 
 		if (LastPage)
 		{
 			LastPage->Header.NextPageId = NewPage->Header.PageId;
+			LastPage->Info.Dirty = true;
 		}
 		PageAppend(DirectoryPage, &NewPage->Header.PageId, sizeof(u32));
 
@@ -260,14 +278,22 @@ u32 PageAppend(page_slot * Page, void * Data, u32 SourceSize)
 {
 	u32 LastIndex = Page->Header.ElementCount;
 	u32 NewIndex = LastIndex + 1;
+
 	void * Pointer = (u8 *) Page->Info.Body + Page->Header.ElementSize * (NewIndex - 1);
+
 	OSCopyMemory(Pointer, Data, SourceSize);
+	Page->Header.ElementCount++;
+	Page->Info.Dirty = true;
+
+	PageMarkAccess(Page);
+
 	return NewIndex;
 }
 
 blob PageGet(page_slot * Page, u32 Index)
 {
 	void * Pointer = (u8 *) Page->Info.Body + Page->Header.ElementSize * (Index - 1);
+	PageMarkAccess(Page);
 	return (blob) { .Data = Pointer, .Count = Page->Header.ElementSize };
 }
 
@@ -282,8 +308,9 @@ bool32 PageInit(page_slot * Page)
 {
 	Page->Info.Body = (u8 *) Page->Data + sizeof(page_header_packed);
 	Page->Info.Header = Page->Data;
-	Page->Info.LastAccessUSec = UnixTimeUSec();
 	Page->Info.Valid = true;
+
+	PageMarkAccess(Page);
 }
 
 bool32 PageSyncHeaderFromData(page_slot * Page)
@@ -315,29 +342,3 @@ bool32 PageSyncHeaderToData(page_slot * Page)
 	Destination->NextPageId = Source->NextPageId;
 	Destination->ElementSize2 = Source->ElementSize2;
 }
-
-#define DEFINE_PIN_FUNCTION(BaseName, ...) { page_slot_temp Page = BaseName##Temp(__VA_ARGS__); return DBContextPin(Context, Page); }
-#define DEFINE_REF_FUNCTION(BaseName, ...) { page_slot_temp Page = BaseName##Temp(__VA_ARGS__); return PageRefFromTemp(Page); }
-#define DEFINE_TEMP_FUNCTION(BaseName, ...) { page_slot * PagePointer = Page.Page; return BaseName(PagePointer, __VA_ARGS__); }
-
-page_slot * PageLoadPin(db_context * Context, u32 PageId) DEFINE_PIN_FUNCTION(PageLoad, Context, PageId)
-page_ref PageLoad(db_context * Context, u32 PageId) DEFINE_REF_FUNCTION(PageLoad, Context, PageId)
-
-page_slot * PageNewPin(db_context * Context, page_header Header) DEFINE_PIN_FUNCTION(PageNew, Context, Header)
-page_ref PageNew(db_context * Context, page_header Header) DEFINE_REF_FUNCTION(PageNew, Context, Header)
-
-u32 PageAppendTemp(page_slot_temp Page, void * Data, u32 SourceSize) DEFINE_TEMP_FUNCTION(PageAppend, Data, SourceSize)
-
-blob PageGetTemp(page_slot_temp Page, u32 Index) DEFINE_TEMP_FUNCTION(PageGet, Index)
-
-u32 PageSpaceLeftTemp(page_slot_temp Page) DEFINE_TEMP_FUNCTION(PageSpaceLeft)
-
-bool32 PageInitTemp(page_slot_temp Page) DEFINE_TEMP_FUNCTION(PageInit)
-
-bool32 PageSyncHeaderFromDataTemp(page_slot_temp Page) DEFINE_TEMP_FUNCTION(PageSyncHeaderFromData)
-
-bool32 PageSyncHeaderToDataTemp(page_slot_temp Page) DEFINE_TEMP_FUNCTION(PageSyncHeaderToData)
-
-#undef DEFINE_PIN_FUNCTION
-#undef DEFINE_REF_FUNCTION
-#undef DEFINE_TEMP_FUNCTION

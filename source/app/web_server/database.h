@@ -56,51 +56,12 @@ typedef struct page_slot
 	page_header Header;
 } page_slot;
 
-typedef struct page_slot_temp
-{
-	page_slot * Page;
-	u32 PageId;
-} page_slot_temp;
-
-typedef struct page_ref
-{
-	u32 PageId;
-	i32 PageBufferIndex;
-} page_ref;
-
 typedef struct db_location
 {
 	u32 PageId;
 	u32 Index;
 	bool32 Error;
 } db_location;
-
-page_ref PageRefFromId(u32 PageId)
-{
-	return (page_ref) { .PageId = PageId, .PageBufferIndex = -1 };
-}
-
-page_ref PageRefFromPage(page_slot * Page)
-{
-	return (page_ref) { .PageId = Page->Header.PageId, .PageBufferIndex = Page->PageBufferIndex };
-}
-
-page_slot_temp PageTempFromPage(page_slot * Page)
-{
-	return (page_slot_temp) { .Page = Page, .PageId = Page->Header.PageId };
-}
-
-page_ref PageRefFromTemp(page_slot_temp Page)
-{
-	if (Page.Page->Header.PageId == Page.PageId)
-	{
-		return PageRefFromPage(Page.Page);
-	}
-	else
-	{
-		return PageRefFromId(Page.PageId);
-	}
-}
 
 #define DB_PAGE_SIZE Kilobytes(16)
 #define BUFFER_POOL_SIZE 64
@@ -142,44 +103,35 @@ db_location DBLocationError()
 buffer_pool BufferPoolInit();
 bp_index BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId);
 void BufferPoolEvict(buffer_pool * BufferPool, i32 BufferPoolIndex);
-void BufferPoolMarkAccess(buffer_pool * BufferPool, i32 BufferPoolIndex);
 void BufferPoolSave(buffer_pool * BufferPool, i32 BufferPoolIndex);
 void BufferPoolLoad(buffer_pool * BufferPool, i32 BufferPoolIndex, u32 PageId);
+void BufferPoolFlush(buffer_pool * BufferPool, bool32);
 
 db_context DBContextNew(db_context * Context);
-page_slot * DBContextPin(db_context * Context, page_slot_temp Page);
+page_slot * DBContextPin(db_context * Context, page_slot * Page);
 void DBContextUnpin(db_context * Context, page_slot * Page);
 void DBContextClose(db_context * Context);
 
-page_slot_temp PageLoadTemp(db_context * Context, u32 PageId);
-page_slot * PageLoadPin(db_context * Context, u32 PageId);
-page_ref PageLoad(db_context * Context, u32 PageId);
+void PageMarkAccess(page_slot * Page);
 
-page_slot_temp PageNewTemp(db_context * Context, page_header Header);
-page_slot * PageNewPin(db_context * Context, page_header Header);
-page_ref PageNew(db_context * Context, page_header Header);
+page_slot * PageLoad(db_context * Context, u32 PageId);
+
+page_slot * PageNew(db_context * Context, page_header Header);
 
 db_location PageDirAppend(db_context * Context, u32 DirectoryPageId, void * Data, u32 SourceSize);
 
 u32 PageSave(page_slot * Page);
-u32 PageSaveTemp(page_slot_temp Page);
 
 u32 PageAppend(page_slot * Page, void * Data, u32 SourceSize);
-u32 PageAppendTemp(page_slot_temp Page, void * Data, u32 SourceSize);
 
 blob PageGet(page_slot * Page, u32 Index);
-blob PageGetTemp(page_slot_temp Page, u32 Index);
 
 u32 PageSpaceLeft(page_slot * Page);
-u32 PageSpaceLeftTemp(page_slot_temp Page);
 
 bool32 PageInit(page_slot * Page);
-bool32 PageInitTemp(page_slot_temp Page);
 
 bool32 PageSyncHeaderFromData(page_slot * Page);
-bool32 PageSyncHeaderFromDataTemp(page_slot_temp Page);
 
 bool32 PageSyncHeaderToData(page_slot * Page);
-bool32 PageSyncHeaderToDataTemp(page_slot_temp Page);
 
 #endif
