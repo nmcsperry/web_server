@@ -1,11 +1,9 @@
 *.sublime-workspace
 *.sublime-project
 *.10x
-build/*
 *.DS_Store
 *.rdbg
 *.vcxproj.user
 .vs/
-Debug/
 run/*
-vs
+build/*

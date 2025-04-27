@@ -90,10 +90,11 @@ typedef enum bp_replacement {
 	BPReplacement_AlreadyLoaded,
 } bp_replacement;
 
-typedef struct bp_index {
+typedef struct bpool_ref {
 	i32 Index;
 	bp_replacement ReplacementType;
-} bp_index;
+	page_slot * UnstablePage;
+} bpool_ref;
 
 db_location DBLocationError()
 {
@@ -101,11 +102,11 @@ db_location DBLocationError()
 }
 
 buffer_pool BufferPoolInit();
-bp_index BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId);
+bpool_ref BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId);
 void BufferPoolEvict(buffer_pool * BufferPool, i32 BufferPoolIndex);
 void BufferPoolSave(buffer_pool * BufferPool, i32 BufferPoolIndex);
 void BufferPoolLoad(buffer_pool * BufferPool, i32 BufferPoolIndex, u32 PageId);
-void BufferPoolFlush(buffer_pool * BufferPool, bool32);
+void BufferPoolFlush(buffer_pool * BufferPool, bool32 Evict);
 
 db_context DBContextNew(db_context * Context);
 page_slot * DBContextPin(db_context * Context, page_slot * Page);
@@ -113,25 +114,15 @@ void DBContextUnpin(db_context * Context, page_slot * Page);
 void DBContextClose(db_context * Context);
 
 void PageMarkAccess(page_slot * Page);
-
 page_slot * PageLoad(db_context * Context, u32 PageId);
-
 page_slot * PageNew(db_context * Context, page_header Header);
-
-db_location PageDirAppend(db_context * Context, u32 DirectoryPageId, void * Data, u32 SourceSize);
-
+db_location PageDirAppend(db_context * Context, page_slot * DirectoryPage, void * Data, u32 SourceSize);
 u32 PageSave(page_slot * Page);
-
 u32 PageAppend(page_slot * Page, void * Data, u32 SourceSize);
-
 blob PageGet(page_slot * Page, u32 Index);
-
 u32 PageSpaceLeft(page_slot * Page);
-
 bool32 PageInit(page_slot * Page);
-
 bool32 PageSyncHeaderFromData(page_slot * Page);
-
 bool32 PageSyncHeaderToData(page_slot * Page);
 
 #endif

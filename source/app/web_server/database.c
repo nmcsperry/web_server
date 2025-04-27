@@ -23,7 +23,7 @@ buffer_pool BufferPoolInit()
 	return Result;
 }
 
-bp_index BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId)
+bpool_ref BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId)
 {
 	// return an index where we can store a page id, in order of preference:
 	// - the buffer slot already containing that page id (already loaded)
@@ -88,60 +88,7 @@ bp_index BufferPoolFindAvailableIndex(buffer_pool * BufferPool, u32 PageId)
 
 	BufferPool->ScanIndex = NextScanIndex % BUFFER_POOL_SIZE;
 
-	return (bp_index) { Candidate, ReplacementType };
-}
-
-void BufferPoolEvict(buffer_pool * BufferPool, i32 BufferPoolIndex)
-{
-	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
-
-	if (Page->Info.Valid && Page->Info.Dirty)
-	{
-		BufferPoolSave(BufferPool, BufferPoolIndex);
-	}
-
-	OSZeroMemory(Page->Data, DB_PAGE_SIZE);
-	Page->Header = (page_header) { 0 };
-	Page->Info = (page_info) { 0 };
-
-	Page->Info.Valid = false;
-}
-
-void PageMarkAccess(page_slot * Page)
-{
-	if (Page->Info.Valid)
-	{
-		Page->Info.LastAccessUSec = UnixTimeUSec();
-		Page->Info.Used = true;
-	}
-}
-
-void BufferPoolSave(buffer_pool * BufferPool, i32 BufferPoolIndex)
-{
-	file_handle File = FileOpenOutput("test.database", false);
-
-	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
-	if (Page->Info.Valid)
-	{
-		PageSyncHeaderToData(Page);
-
-		str8 Data = (str8) { .Data = Page->Data, .Count = DB_PAGE_SIZE };
-		FileOutputSegment(File, Data, Page->Header.PageId * DB_PAGE_SIZE);
-
-		FileClose(File);
-	}
-}
-
-void BufferPoolLoad(buffer_pool * BufferPool, i32 BufferPoolIndex, u32 PageId)
-{
-	BufferPoolEvict(BufferPool, BufferPoolIndex);
-
-	file_handle File = FileOpenInput("test.database");
-
-	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
-	FileInputSegmentToPtr(File, Page->Data, PageId * DB_PAGE_SIZE, DB_PAGE_SIZE);
-
-	FileClose(File);
+	return (bpool_ref) { .Index = Candidate, .ReplacementType = ReplacementType, .UnstablePage = &BufferPool->Pages[Candidate] };
 }
 
 void BufferPoolFlush(buffer_pool * BufferPool, bool32 Evict)
@@ -188,9 +135,60 @@ void DBContextClose(db_context * Context)
 	}
 }
 
+void PageMarkAccess(page_slot * Page)
+{
+	if (Page->Info.Valid)
+	{
+		Page->Info.LastAccessUSec = UnixTimeUSec();
+		Page->Info.Used = true;
+	}
+}
+
+void PageEvict(db_context * Context, page_slot * Page)
+{
+	if (Page->Info.Valid && Page->Info.Dirty)
+	{
+		PageSave(Context, Page);
+	}
+
+	OSZeroMemory(Page->Data, DB_PAGE_SIZE);
+	Page->Header = (page_header){ 0 };
+	Page->Info = (page_info){ 0 };
+
+	Page->Info.Valid = false;
+}
+
+void BufferPoolSave(buffer_pool * BufferPool, i32 BufferPoolIndex)
+{
+	file_handle File = FileOpenOutput("test.database", false);
+
+	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
+	if (Page->Info.Valid)
+	{
+		PageSyncHeaderToData(Page);
+
+		str8 Data = (str8){ .Data = Page->Data, .Count = DB_PAGE_SIZE };
+		FileOutputSegment(File, Data, Page->Header.PageId * DB_PAGE_SIZE);
+
+		FileClose(File);
+	}
+}
+
+void BufferPoolLoad(buffer_pool * BufferPool, i32 BufferPoolIndex, u32 PageId)
+{
+	BufferPoolEvict(BufferPool, BufferPoolIndex);
+
+	file_handle File = FileOpenInput("test.database");
+
+	page_slot * Page = &BufferPool->Pages[BufferPoolIndex];
+	FileInputSegmentToPtr(File, Page->Data, PageId * DB_PAGE_SIZE, DB_PAGE_SIZE);
+
+	FileClose(File);
+}
+
 page_slot * PageLoad(db_context * Context, u32 PageId)
 {
-	bp_index BufferPoolIndex = BufferPoolFindAvailableIndex(Context->BufferPool, PageId);
+	bpool_ref BufferPoolIndex = BufferPoolFindAvailableIndex(Context->BufferPool, PageId);
 	page_slot * Page = &Context->BufferPool->Pages[BufferPoolIndex.Index];
 
 	if (BufferPoolIndex.ReplacementType != BPReplacement_AlreadyLoaded)
@@ -208,7 +206,7 @@ page_slot * PageNew(db_context * Context, page_header Header)
 	Header.PageId = Context->BufferPool->NextFreePageId;
 	Context->BufferPool->NextFreePageId++; // todo: when we delete pages, mark them as unused, reuse them, etc.
 
-	bp_index BufferPoolIndex = BufferPoolFindAvailableIndex(Context->BufferPool, -1);
+	bpool_ref BufferPoolIndex = BufferPoolFindAvailableIndex(Context->BufferPool, -1);
 	BufferPoolEvict(Context->BufferPool, BufferPoolIndex.Index);
 	page_slot * Page = &Context->BufferPool->Pages[BufferPoolIndex.Index];
 
