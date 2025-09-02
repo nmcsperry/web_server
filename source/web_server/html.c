@@ -106,19 +106,13 @@ str8 HTMLFromHTMLNodes(memory_arena * Arena, html_node * Nodes, u32 Count)
             {
                 Str8WriteFmt(Buffer, " />");
             }
-Pop:
-            if (StackIndex)
+
+            while (StackIndex && --TagCountStack[StackIndex - 1] == 0)
             {
-                TagCountStack[StackIndex - 1]--;
+                Str8WriteFmt(Buffer, "</%{str8}>", TagNameStack[StackIndex - 1]);
 
-                if (TagCountStack[StackIndex - 1] == 0)
-                {
-                    Str8WriteFmt(Buffer, "</%{str8}>", TagNameStack[StackIndex - 1]);
-
-                    TagNameStack[StackIndex - 1] = 0;
-                    StackIndex--;
-                    goto Pop;
-                }
+                TagNameStack[StackIndex - 1] = 0;
+                StackIndex--;
             }
         }
     }
