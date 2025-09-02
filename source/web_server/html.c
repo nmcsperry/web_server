@@ -131,8 +131,7 @@ str8 HTMLNodesTest(memory_arena * Arena)
         (html_node) { .Type = HTMLStyle_color, .Content = Str8Lit("red"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 },
         (html_node) { .Type = HTMLTag_p, .Content = Str8Lit("Blue"), .AttrCount = 0, .StyleCount = 1, .ChildTagCount = 0 },
         (html_node) { .Type = HTMLStyle_color, .Content = Str8Lit("blue"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 },
-
     };
 
-    return HTMLFromHTMLNodes(Arena, Nodes, 8);
+    return HTMLFromHTMLNodes(Arena, Nodes, ArrayCount(Nodes));
 }
