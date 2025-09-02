@@ -22,16 +22,10 @@ void EntryHook()
 
 		http_request * Request = 0;
 		while (Request = ServerNextRequest(&Server))
-		{			
-			/*str8 Body = Str8Fmt(Server.ResponseArena, "<html><body><p>Hello, this is the website.</p>"
-				"<p>You are asking about %{str8}.</p>"
-				"</body></html>", Request->Path);*/
-
-			str8 Body = HTMLNodesTest(Server.ResponseArena);
-
+		{
 			Request->ResponseBehavior = ResponseBehavior_Respond;
 			Request->ResponseHTTPCode = 200;
-			Request->ResponseBody = Body;
+			Request->ResponseBody = HTMLNodesTest(Server.ResponseArena);;
 		}
 	}
 }
