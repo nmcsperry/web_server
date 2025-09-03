@@ -16,9 +16,15 @@ typedef struct html_node_type
     u32 Class;
 } html_node_type;
 
-#define HTMLTagDef(Name) html_node_type HTMLTag_##Name##_Value = { Str8LitInit(#Name), Str8LitInit(#Name), HtmlNodeClass_Tag }, * HTMLTag_##Name = &HTMLTag_##Name##_Value
-#define HTMLAttrDef(Name) html_node_type HTMLAttr_##Name##_Value = { Str8LitInit(#Name), Str8LitInit(#Name), HtmlNodeClass_Attr }, * HTMLAttr_##Name = &HTMLAttr_##Name##_Value
-#define HTMLStyleDef(Name, JSName) html_node_type HTMLStyle_##JSName##_Value = { Str8LitInit(#Name), Str8LitInit(#JSName), HtmlNodeClass_Style }, * HTMLStyle_##Name = &HTMLStyle_##Name##_Value
+#define HTMLTagDef(Name) \
+    html_node_type HTMLTag_##Name##_Value = { Str8LitInit(#Name), Str8LitInit(#Name), HtmlNodeClass_Tag }, \
+    * HTMLTag_##Name = &HTMLTag_##Name##_Value
+#define HTMLAttrDef(Name) \
+    html_node_type HTMLAttr_##Name##_Value = { Str8LitInit(#Name), Str8LitInit(#Name), HtmlNodeClass_Attr }, \
+    * HTMLAttr_##Name = &HTMLAttr_##Name##_Value
+#define HTMLStyleDef(Name, JSName) \
+    html_node_type HTMLStyle_##JSName##_Value = { Str8LitInit(#Name), Str8LitInit(#JSName), HtmlNodeClass_Style }, \
+    * HTMLStyle_##Name = &HTMLStyle_##Name##_Value
 
 HTMLTagDef(html);
 HTMLTagDef(body);
@@ -32,7 +38,9 @@ HTMLStyleDef(color, color);
 #undef HTMLAttrDef
 #undef HTMLStyleDef
 
-typedef struct html_node {
+typedef struct html_node html_node;
+
+struct html_node {
     u64 Key;
     hash_value Hash;
 
@@ -43,54 +51,55 @@ typedef struct html_node {
     u32 AttrCount;
     u32 StyleCount;
     u32 ChildTagCount;
-} html_node;
+
+	html_node * Next;
+};
 
 #define HtmlMaxTagDepth 16
 
-str8 HTMLFromHTMLNodes(memory_arena * Arena, html_node * Nodes, u32 Count)
+str8 HTMLFromHTMLNodes(memory_arena * Arena, html_node * Nodes)
 {
-    str8 * TagNameStack[HtmlMaxTagDepth] = { 0 };
-    u32 TagCountStack[HtmlMaxTagDepth] = { 0 };
+    html_node * TagStack[HtmlMaxTagDepth] = { 0 };
+    u32 TagChildCountStack[HtmlMaxTagDepth] = { 0 };
     u32 StackIndex = 0;
 
     memory_buffer * Buffer = ScratchBufferStart();
 
-    u32 Index = 0;
-    while (Index < Count)
+    html_node * Node = Nodes;
+    while (Node)
     {
-        html_node * Node = &Nodes[Index];
-        u32 ChildrenStartIndex = Index + 1;
+		html_node * TagNode = Node;
 
-        Str8WriteFmt(Buffer, "<%{str8}", Node->Type->Name);
+        Str8WriteFmt(Buffer, "<%{str8}", TagNode->Type->Name);
 
-        Index++;
-
-        if (Node->AttrCount)
+        if (TagNode->AttrCount)
         {
-            for (; Index < ChildrenStartIndex + Node->AttrCount; Index++)
+            for (u32 Index = 0; Index < TagNode->AttrCount; Index++)
             {
-                html_node * Node2 = &Nodes[Index];
-                Str8WriteFmt(Buffer, " %{str8}=\"%{str8}\"", Node2->Type->Name, Node2->Content);
+                Node = Node->Next;
+                Str8WriteFmt(Buffer, " %{str8}=\"%{str8}\"", Node->Type->Name, Node->Content);
             }
         }
 
-        if (Node->StyleCount)
+        if (TagNode->StyleCount)
         {
             Str8WriteFmt(Buffer, " style=\"");
 
-            for (; Index < ChildrenStartIndex + Node->AttrCount + Node->StyleCount; Index++)
+            for (u32 Index = 0; Index < TagNode->StyleCount; Index++)
             {
-                html_node * Node2 = &Nodes[Index];
-                Str8WriteFmt(Buffer, "%{str8}:%{str8};", Node2->Type->Name, Node2->Content);
+                Node = Node->Next;
+                Str8WriteFmt(Buffer, "%{str8}:%{str8};", Node->Type->Name, Node->Content);
             }
 
             Str8WriteFmt(Buffer, "\"");
         }
 
-        if (Node->ChildTagCount)
+        Node = Node->Next;
+
+        if (TagNode->ChildTagCount)
         {
-            TagNameStack[StackIndex] = &Node->Type->Name;
-            TagCountStack[StackIndex] = Node->ChildTagCount;
+            TagStack[StackIndex] = TagNode;
+            TagChildCountStack[StackIndex] = TagNode->ChildTagCount;
 
             Str8WriteFmt(Buffer, ">");
 
@@ -98,20 +107,20 @@ str8 HTMLFromHTMLNodes(memory_arena * Arena, html_node * Nodes, u32 Count)
         }
         else
         {
-            if (Node->Content.Count)
+            if (TagNode->Content.Count)
             {
-                Str8WriteFmt(Buffer, ">%{str8}</%{str8}>", Node->Content, Node->Type->Name);
+                Str8WriteFmt(Buffer, ">%{str8}</%{str8}>", TagNode->Content, TagNode->Type->Name);
             }
             else
             {
                 Str8WriteFmt(Buffer, " />");
             }
 
-            while (StackIndex && --TagCountStack[StackIndex - 1] == 0)
+            while (StackIndex && --TagChildCountStack[StackIndex - 1] == 0)
             {
-                Str8WriteFmt(Buffer, "</%{str8}>", TagNameStack[StackIndex - 1]);
+                Str8WriteFmt(Buffer, "</%{str8}>", TagStack[StackIndex - 1]->Type->Name);
 
-                TagNameStack[StackIndex - 1] = 0;
+                TagStack[StackIndex - 1] = 0;
                 StackIndex--;
             }
         }
@@ -122,16 +131,23 @@ str8 HTMLFromHTMLNodes(memory_arena * Arena, html_node * Nodes, u32 Count)
 
 str8 HTMLNodesTest(memory_arena * Arena)
 {
-    html_node Nodes[] = {
-        (html_node) { .Type = HTMLTag_html, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 2 },
-        (html_node) { .Type = HTMLTag_head, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 1 },
-        (html_node) { .Type = HTMLTag_title, .Content = Str8Lit("HTML Builder"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 },
-        (html_node) { .Type = HTMLTag_body, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 2 },
-        (html_node) { .Type = HTMLTag_p, .Content = Str8Lit("Red"), .AttrCount = 0, .StyleCount = 1, .ChildTagCount = 0 },
-        (html_node) { .Type = HTMLStyle_color, .Content = Str8Lit("red"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 },
-        (html_node) { .Type = HTMLTag_p, .Content = Str8Lit("Blue"), .AttrCount = 0, .StyleCount = 1, .ChildTagCount = 0 },
-        (html_node) { .Type = HTMLStyle_color, .Content = Str8Lit("blue"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 },
-    };
+    html_node HTML = { .Type = HTMLTag_html, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 2 };
+    html_node Head = { .Type = HTMLTag_head, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 1 };
+    html_node Title = { .Type = HTMLTag_title, .Content = Str8Lit("HTML Builder"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 };
+    html_node Body = { .Type = HTMLTag_body, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 2 };
+    html_node P1 = { .Type = HTMLTag_p, .Content = Str8Lit("Red"), .AttrCount = 0, .StyleCount = 1, .ChildTagCount = 0 };
+    html_node Color1 = { .Type = HTMLStyle_color, .Content = Str8Lit("red"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 };
+    html_node P2 = { .Type = HTMLTag_p, .Content = Str8Lit("Blue"), .AttrCount = 0, .StyleCount = 1, .ChildTagCount = 0 };
+    html_node Color2 = { .Type = HTMLStyle_color, .Content = Str8Lit("blue"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 };
 
-    return HTMLFromHTMLNodes(Arena, Nodes, ArrayCount(Nodes));
+	HTML.Next = &Head;
+	Head.Next = &Title;
+	Title.Next = &Body;
+	Body.Next = &P1;
+	P1.Next = &Color1;
+	Color1.Next = &P2;
+	P2.Next = &Color2;
+	Color2.Next = 0;
+
+    return HTMLFromHTMLNodes(Arena, &HTML);
 }
