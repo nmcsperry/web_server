@@ -58,6 +58,8 @@ u32 ArenaMax(memory_arena * Arena, u32 Align);
 #define ArenaPushArray(Arena, type, Count) ArenaPushBytes((Arena), sizeof(type) * (Count), alignof(type))
 #define ArenaPushAndCopy(Arena, type, Data) ArenaPushBytesAndCopy((Arena), sizeof(type), alignof(type), (Data))
 #define ArenaPushArrayAndCopy(Arena, type, Count, Data) ArenaPushBytesAndCopy((Arena), sizeof(type) * (Count), alignof(type), (Data))
+#define ArenaPushZero(Arena, type) ArenaPushBytesAndCopy((Arena), sizeof(type), alignof(type), 0)
+#define ArenaPushArrayZero(Arena, type, Count) ArenaPushBytesAndCopy((Arena), sizeof(type) * (Count), alignof(type), 0)
 
 void * ArenaPushBytes(memory_arena * Arena, u32 Size, u32 Align);
 void * ArenaPushBytesAndCopy(memory_arena * Arena, u32 Size, u32 Align, void * Data);

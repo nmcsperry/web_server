@@ -311,6 +311,7 @@
     <ClInclude Include="source\reuse\network\network_os\win32\network_win32_internal.h" />
     <ClInclude Include="source\reuse\network\network_poll.h" />
     <ClInclude Include="source\reuse\network\network_socket.h" />
+    <ClInclude Include="source\web_server\html.h" />
     <ClInclude Include="source\web_server\http_server.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

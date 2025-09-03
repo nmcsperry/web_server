@@ -1,63 +1,7 @@
 #include "../reuse/base/base_include.h"
+#include "html.h"
 
-enum html_node_class
-{
-    HtmlNodeClass_Tag = 1,
-    HtmlNodeClass_Attr,
-    HtmlNodeClass_Style,
-    HtmlNodeClass_Fragment
-};
-
-typedef struct html_node_type
-{
-    str8 Name;
-    str8 JavaScriptName;
-
-    u32 Class;
-} html_node_type;
-
-#define HTMLTagDef(Name) \
-    html_node_type HTMLTag_##Name##_Value = { Str8LitInit(#Name), Str8LitInit(#Name), HtmlNodeClass_Tag }, \
-    * HTMLTag_##Name = &HTMLTag_##Name##_Value
-#define HTMLAttrDef(Name) \
-    html_node_type HTMLAttr_##Name##_Value = { Str8LitInit(#Name), Str8LitInit(#Name), HtmlNodeClass_Attr }, \
-    * HTMLAttr_##Name = &HTMLAttr_##Name##_Value
-#define HTMLStyleDef(Name, JSName) \
-    html_node_type HTMLStyle_##JSName##_Value = { Str8LitInit(#Name), Str8LitInit(#JSName), HtmlNodeClass_Style }, \
-    * HTMLStyle_##Name = &HTMLStyle_##Name##_Value
-
-HTMLTagDef(html);
-HTMLTagDef(body);
-HTMLTagDef(head);
-HTMLTagDef(title);
-HTMLTagDef(p);
-
-HTMLStyleDef(color, color);
-
-#undef HTMLTagDef
-#undef HTMLAttrDef
-#undef HTMLStyleDef
-
-typedef struct html_node html_node;
-
-struct html_node {
-    u64 Key;
-    hash_value Hash;
-
-    html_node_type * Type;
-
-    str8 Content;
-
-    u32 AttrCount;
-    u32 StyleCount;
-    u32 ChildTagCount;
-
-	html_node * Next;
-};
-
-#define HtmlMaxTagDepth 16
-
-str8 HTMLFromHTMLNodes(memory_arena * Arena, html_node * Nodes)
+str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
 {
     html_node * TagStack[HtmlMaxTagDepth] = { 0 };
     u32 TagChildCountStack[HtmlMaxTagDepth] = { 0 };
@@ -129,25 +73,142 @@ str8 HTMLFromHTMLNodes(memory_arena * Arena, html_node * Nodes)
     return ScratchBufferEndStr8(Buffer, Arena);
 }
 
+html_writer HTMLWriterCreate(memory_arena * Arena)
+{
+    html_writer Writer = { 0 };
+    Writer.Arena = Arena;
+
+	html_node * Root = ArenaPushZero(Arena, html_node);
+	Root->Type = HTMLTag_html;
+	
+    Writer.DocumentRoot = Root;
+    Writer.CurrentTag = Root;
+    Writer.LastNode = Root;
+
+	return Writer;
+}
+
+html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key)
+{
+    html_node * Node = ArenaPushZero(Writer->Arena, html_node);
+	Node->Type = Type;
+	Node->Key = Key;
+
+	Writer->CurrentTag->ChildTagCount++;
+	Writer->CurrentTag = Node;
+    Writer->LastNode->Next = Node;
+    Writer->LastNode = Node;
+	Writer->TagStack[Writer->StackIndex++] = Node;
+
+    return Node;
+}
+
+html_node * HTMLSingleTagKey(html_writer * Writer, html_node_type * Type, u64 Key)
+{
+    html_node * Node = ArenaPushZero(Writer->Arena, html_node);
+    Node->Type = Type;
+    Node->Key = Key;
+
+    Writer->CurrentTag->ChildTagCount++;
+	Writer->LastNode->Next = Node;
+    Writer->LastNode = Node;
+
+    return Node;
+}
+
+html_node * HTMLStartTag(html_writer * Writer, html_node_type * Type)
+{
+	HTMLStartTagKey(Writer, Type, 0);
+}
+
+html_node * HTMLSingleTag(html_writer * Writer, html_node_type * Type)
+{
+    HTMLSingleTagKey(Writer, Type, 0);
+}
+
+html_node * HTMLEndTag(html_writer * Writer)
+{
+    if (Writer->StackIndex <= 1)
+    {
+		Writer->CurrentTag = Writer->DocumentRoot;
+        return 0;
+    }
+
+    Writer->TagStack[Writer->StackIndex--] = 0;
+    Writer->CurrentTag = Writer->TagStack[Writer->StackIndex - 1];
+	return Writer->CurrentTag;
+}
+
+html_node * HTMLText(html_writer * Writer, str8 Text)
+{
+    Writer->CurrentTag->Content = Text;
+}
+
+html_node * HTMLTextFmt(html_writer * Writer, char * FormatCStr, ...)
+{
+    va_list FormatArguments;
+    va_start(FormatArguments, FormatCStr);
+
+    str8 Result = Str8FmtCore(Writer->Arena, Str8FromCStr(FormatCStr), FormatArguments);
+
+    va_end(FormatArguments);
+
+	HTMLText(Writer, Result);
+}
+
+html_node * HTMLAttr(html_writer * Writer, html_node_type * Attr, str8 Value)
+{
+    html_node * Node = ArenaPushZero(Writer->Arena, html_node);
+    Node->Type = Attr;
+    Node->Content = Value;
+
+	// todo: verify attributes directly follow the open tag or another attribute
+
+    Writer->CurrentTag->AttrCount++;
+    Writer->LastNode->Next = Node;
+    Writer->LastNode = Node;
+}
+
+html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
+{
+    html_node * Node = ArenaPushZero(Writer->Arena, html_node);
+    Node->Type = Style;
+    Node->Content = Value;
+
+    // todo: verify attributes directly follow the open tag, an attribute or another style
+
+    Writer->CurrentTag->StyleCount++;
+    Writer->LastNode->Next = Node;
+    Writer->LastNode = Node;
+}
+
+
 str8 HTMLNodesTest(memory_arena * Arena)
 {
-    html_node HTML = { .Type = HTMLTag_html, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 2 };
-    html_node Head = { .Type = HTMLTag_head, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 1 };
-    html_node Title = { .Type = HTMLTag_title, .Content = Str8Lit("HTML Builder"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 };
-    html_node Body = { .Type = HTMLTag_body, .Content = Str8Empty(), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 2 };
-    html_node P1 = { .Type = HTMLTag_p, .Content = Str8Lit("Red"), .AttrCount = 0, .StyleCount = 1, .ChildTagCount = 0 };
-    html_node Color1 = { .Type = HTMLStyle_color, .Content = Str8Lit("red"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 };
-    html_node P2 = { .Type = HTMLTag_p, .Content = Str8Lit("Blue"), .AttrCount = 0, .StyleCount = 1, .ChildTagCount = 0 };
-    html_node Color2 = { .Type = HTMLStyle_color, .Content = Str8Lit("blue"), .AttrCount = 0, .StyleCount = 0, .ChildTagCount = 0 };
+	html_writer Writer = HTMLWriterCreate(Arena);
 
-	HTML.Next = &Head;
-	Head.Next = &Title;
-	Title.Next = &Body;
-	Body.Next = &P1;
-	P1.Next = &Color1;
-	Color1.Next = &P2;
-	P2.Next = &Color2;
-	Color2.Next = 0;
+    HTMLTag(&Writer, HTMLTag_head)
+    {
+        HTMLTag(&Writer, HTMLTag_title)
+        {
+            HTMLText(&Writer, Str8Lit("HTML Builder"));
+        }
+    }
 
-    return HTMLFromHTMLNodes(Arena, &HTML);
+    HTMLTag(&Writer, HTMLTag_body)
+    {
+        HTMLTag(&Writer, HTMLTag_p)
+        {
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
+            HTMLText(&Writer, Str8Lit("Red"));
+        }
+
+        HTMLTag(&Writer, HTMLTag_p)
+        {
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("blue"));
+            HTMLText(&Writer, Str8Lit("Blue"));
+        }
+    }
+
+    return Str8FromHTML(Arena, Writer.DocumentRoot);
 }

@@ -135,7 +135,14 @@ void * ArenaPushBytesAndCopy(memory_arena * Arena, u32 Size, u32 Align, void * D
 		return 0;
 	}
 
-	OSCopyMemory(Pointer, Data, Size);
+	if (Data)
+	{
+		OSCopyMemory(Pointer, Data, Size);
+	}
+	else
+	{
+		OSZeroMemory(Pointer, Size);
+	}
 
 	return Pointer;
 }
