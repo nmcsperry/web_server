@@ -10,6 +10,36 @@
 #include "http_server.c"
 #include "html.c"
 
+str8 MainPage(memory_arena * Arena)
+{
+    html_writer Writer = HTMLWriterCreate(Arena);
+
+    HTMLTag(&Writer, HTMLTag_head)
+    {
+        HTMLTag(&Writer, HTMLTag_title)
+        {
+            HTMLText(&Writer, Str8Lit("HTML Builder"));
+        }
+    }
+
+    HTMLTag(&Writer, HTMLTag_body)
+    {
+        HTMLTag(&Writer, HTMLTag_p)
+        {
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
+            HTMLText(&Writer, Str8Lit("Red"));
+        }
+
+        HTMLTag(&Writer, HTMLTag_p)
+        {
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("blue"));
+            HTMLText(&Writer, Str8Lit("Blue"));
+        }
+    }
+
+    return Str8FromHTML(Arena, Writer.DocumentRoot);
+}
+
 void EntryHook()
 {
 	SocketInit();
@@ -25,7 +55,7 @@ void EntryHook()
 		{
 			Request->ResponseBehavior = ResponseBehavior_Respond;
 			Request->ResponseHTTPCode = 200;
-			Request->ResponseBody = HTMLNodesTest(Server.ResponseArena);;
+			Request->ResponseBody = MainPage(Server.ResponseArena);
 		}
 	}
 }

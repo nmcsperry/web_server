@@ -181,34 +181,3 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
     Writer->LastNode->Next = Node;
     Writer->LastNode = Node;
 }
-
-
-str8 HTMLNodesTest(memory_arena * Arena)
-{
-	html_writer Writer = HTMLWriterCreate(Arena);
-
-    HTMLTag(&Writer, HTMLTag_head)
-    {
-        HTMLTag(&Writer, HTMLTag_title)
-        {
-            HTMLText(&Writer, Str8Lit("HTML Builder"));
-        }
-    }
-
-    HTMLTag(&Writer, HTMLTag_body)
-    {
-        HTMLTag(&Writer, HTMLTag_p)
-        {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
-            HTMLText(&Writer, Str8Lit("Red"));
-        }
-
-        HTMLTag(&Writer, HTMLTag_p)
-        {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("blue"));
-            HTMLText(&Writer, Str8Lit("Blue"));
-        }
-    }
-
-    return Str8FromHTML(Arena, Writer.DocumentRoot);
-}

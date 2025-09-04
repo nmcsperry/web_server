@@ -26,6 +26,22 @@ hash_value HashContinueStr8(hash_value Current, str8 Value)
 	return Current;
 }
 
+hash_value HashStr8IgnoreCase(str8 Value)
+{
+	return HashContinueStr8(HashStart(), Value);
+}
+
+hash_value HashContinueStr8IgnoreCase(hash_value Current, str8 Value)
+{
+	for (u32 CharIndex = 0; CharIndex < Value.Count; CharIndex++)
+	{
+		u8 CharValue = (u8)Value.Data[CharIndex];
+		if (CharValue >= 'A' || CharValue <= 'Z') CharValue += 'a' - 'A';
+		Current = (Current ^ CharValue) * 0x01000193;
+	}
+	return Current;
+}
+
 hash_value HashContinueU8(hash_value Current, u8 Value)
 {
 	return (Current ^ Value) * 0x01000193;
@@ -60,4 +76,84 @@ hash_value HashContinueI16(hash_value Current, i16 Value)
 hash_value HashContinueI32(hash_value Current, i32 Value)
 {
 	return HashContinueU32(Current, (u32) Value);
+}
+
+// hash table
+
+hash_slot_info HashTableGetSlot(hash_table * HashTable, str8 Key)
+{
+	hash_value HashValue = HashStr8(Key);
+	if (HashValue == 0) HashValue = 1;
+
+	u32 NaturalSlot = HashValue % HashTable->TableSize;
+	u32 CurrentSlot = NaturalSlot;
+
+	bool32 Error = false;
+
+	// scan until we find matching hashes
+	while (HashTable->Hashes[CurrentSlot] != HashValue && HashTable->Hashes[CurrentSlot] != 0)
+	{
+		CurrentSlot++;
+		if (CurrentSlot > HashTable->TableSize) CurrentSlot = 0;
+		if (CurrentSlot == NaturalSlot)
+		{
+			Error = true;
+			break;
+		}
+	}
+
+	// scan until we find matching key
+	while (!Str8Match(Key, HashTable->Keys[CurrentSlot], 0) && HashTable->Hashes[CurrentSlot] == HashValue)
+	{
+		CurrentSlot++;
+		if (CurrentSlot > HashTable->TableSize) CurrentSlot = 0;
+		if (CurrentSlot == NaturalSlot)
+		{
+			Error = true;
+			break;
+		}
+	}
+
+	// todo: implement the rest of this!
+}
+
+hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize)
+{
+	hash_table * Result = ArenaPushZero(Arena, hash_table);
+	Result->Arena = Arena;
+	Result->Hashes = ArenaPushArrayZero(Arena, hash_value, TableSize);
+	Result->Keys = ArenaPushArrayZero(Arena, str8, TableSize);
+	Result->Data = ArenaPushArrayZero(Arena, str8, TableSize);
+
+	Result->TableSize = TableSize;
+	Result->DataSize = DataSize;
+}
+
+void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
+{
+	hash_value HashValue = HashStr8(Key);
+	
+}
+
+void * HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data)
+{
+	if (HashTable->DataSize)
+	{
+		HashTableInsert(HashTable, Key, (blob) { .Data = Data, .Count = HashTable->DataSize });
+	}
+}
+
+bool32 HashTableDelete(hash_table * HashTable, str8 Key)
+{
+
+}
+
+blob HashTableGet(hash_table * HashTable, str8 Key)
+{
+
+}
+
+void * HashTableGetPtr(hash_table * HashTable, str8 Key)
+{
+	return HashTableGet(HashTable, Key).Data;
 }
