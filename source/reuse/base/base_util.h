@@ -79,6 +79,7 @@
 #define local_persist static
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof(Array[0]))
+#define ArrayItemSize(Array) sizeof(Array[0])
 
 #define switch_case(Value) break; case (Value):
 #define through_case(Value) case (Value):

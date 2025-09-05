@@ -29,13 +29,15 @@ typedef struct hash_table
 
 	u32 TableSize;
 	u32 DataSize;
+	u32 Occupied;
 } hash_table;
 
 typedef struct hash_slot_info
 {
 	u32 NaturalSlot;
+	hash_value Hash;
 	u32 Slot;
-	bool32 Occupied;
+	bool32 Error;
 } hash_slot_info;
 
 hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize);

@@ -88,33 +88,38 @@ hash_slot_info HashTableGetSlot(hash_table * HashTable, str8 Key)
 	u32 NaturalSlot = HashValue % HashTable->TableSize;
 	u32 CurrentSlot = NaturalSlot;
 
-	bool32 Error = false;
+	hash_slot_info Result = { 0 };
+	Result.NaturalSlot = NaturalSlot;
+	Result.Hash = HashValue;
 
 	// scan until we find matching hashes
 	while (HashTable->Hashes[CurrentSlot] != HashValue && HashTable->Hashes[CurrentSlot] != 0)
 	{
 		CurrentSlot++;
-		if (CurrentSlot > HashTable->TableSize) CurrentSlot = 0;
+		if (CurrentSlot >= HashTable->TableSize) CurrentSlot = 0;
 		if (CurrentSlot == NaturalSlot)
 		{
-			Error = true;
-			break;
+			Result.Error = true;
+			return Result;
 		}
 	}
 
 	// scan until we find matching key
+
+	// todo: save if we found a match or not
 	while (!Str8Match(Key, HashTable->Keys[CurrentSlot], 0) && HashTable->Hashes[CurrentSlot] == HashValue)
 	{
 		CurrentSlot++;
-		if (CurrentSlot > HashTable->TableSize) CurrentSlot = 0;
+		if (CurrentSlot >= HashTable->TableSize) CurrentSlot = 0;
 		if (CurrentSlot == NaturalSlot)
 		{
-			Error = true;
-			break;
+			Result.Error = true;
+			return Result;
 		}
 	}
 
-	// todo: implement the rest of this!
+	Result.Slot = CurrentSlot;
+	return Result;
 }
 
 hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize)
@@ -131,8 +136,54 @@ hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize)
 
 void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
 {
-	hash_value HashValue = HashStr8(Key);
-	
+	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
+	u32 Slot = SlotInfo.Slot;
+
+	if (SlotInfo.Error)
+	{
+		return 0;
+	}
+
+	if (Str8Match(Key, HashTable->Keys[Slot], 0))
+	{
+		// Assert(HashTable->Hashes[Slot] == SlotInfo.Hash);
+
+		// replace value in existing slot
+		HashTable->Data[Slot] = Data;
+	}
+	else if (HashTable->Hashes[Slot] == 0)
+	{
+		// make room if needed
+		if (HashTable->Occupied < HashTable->TableSize)
+		{
+			u32 EndSlot = Slot;
+			while (HashTable->Hashes[EndSlot])
+			{
+				EndSlot++;
+				if (EndSlot >= HashTable->TableSize) EndSlot = 0;
+			}
+
+			u32 Size = Slot - EndSlot;
+			OSMoveMemory(&HashTable->Hashes[Slot], sizeof(hash_value) * Size, &HashTable->Hashes[Slot + 1]);
+			OSMoveMemory(&HashTable->Data[Slot], sizeof(str8) * Size, &HashTable->Data[Slot + 1]);
+			OSMoveMemory(&HashTable->Keys[Slot], sizeof(str8) * Size, &HashTable->Keys[Slot + 1]);
+
+			OSZeroMemory(&HashTable->Hashes[Slot], sizeof(hash_value));
+			OSZeroMemory(&HashTable->Data[Slot], sizeof(str8));
+			OSZeroMemory(&HashTable->Keys[Slot], sizeof(str8));
+		}
+
+		// insert into new slot
+		HashTable->Hashes[Slot] = SlotInfo.Hash;
+		HashTable->Data[Slot] = Data;
+		HashTable->Keys[Slot] = Key;
+
+		HashTable->Occupied++;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 void * HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data)
@@ -145,11 +196,15 @@ void * HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data)
 
 bool32 HashTableDelete(hash_table * HashTable, str8 Key)
 {
+	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
 
+	// todo: implement this!
 }
 
 blob HashTableGet(hash_table * HashTable, str8 Key)
 {
+	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
+
 
 }
 
