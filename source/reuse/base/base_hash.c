@@ -106,8 +106,8 @@ hash_slot_info HashTableGetSlot(hash_table * HashTable, str8 Key)
 
 	// scan until we find matching key
 
-	// todo: save if we found a match or not
-	while (!Str8Match(Key, HashTable->Keys[CurrentSlot], 0) && HashTable->Hashes[CurrentSlot] == HashValue)
+	bool32 FoundMatch;
+	while (!(FoundMatch = Str8Match(Key, HashTable->Keys[CurrentSlot], 0)) && HashTable->Hashes[CurrentSlot] == HashValue)
 	{
 		CurrentSlot++;
 		if (CurrentSlot >= HashTable->TableSize) CurrentSlot = 0;
@@ -119,6 +119,7 @@ hash_slot_info HashTableGetSlot(hash_table * HashTable, str8 Key)
 	}
 
 	Result.Slot = CurrentSlot;
+	Result.Match = FoundMatch;
 	return Result;
 }
 
@@ -144,17 +145,15 @@ void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
 		return 0;
 	}
 
-	if (Str8Match(Key, HashTable->Keys[Slot], 0))
+	if (SlotInfo.Match)
 	{
-		// Assert(HashTable->Hashes[Slot] == SlotInfo.Hash);
-
 		// replace value in existing slot
 		HashTable->Data[Slot] = Data;
 	}
 	else if (HashTable->Hashes[Slot] == 0)
 	{
 		// make room if needed
-		if (HashTable->Occupied < HashTable->TableSize)
+		if (HashTable->Count < HashTable->TableSize)
 		{
 			u32 EndSlot = Slot;
 			while (HashTable->Hashes[EndSlot])
@@ -164,6 +163,7 @@ void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
 			}
 
 			u32 Size = Slot - EndSlot;
+
 			OSMoveMemory(&HashTable->Hashes[Slot], sizeof(hash_value) * Size, &HashTable->Hashes[Slot + 1]);
 			OSMoveMemory(&HashTable->Data[Slot], sizeof(str8) * Size, &HashTable->Data[Slot + 1]);
 			OSMoveMemory(&HashTable->Keys[Slot], sizeof(str8) * Size, &HashTable->Keys[Slot + 1]);
@@ -178,7 +178,7 @@ void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
 		HashTable->Data[Slot] = Data;
 		HashTable->Keys[Slot] = Key;
 
-		HashTable->Occupied++;
+		HashTable->Count++;
 	}
 	else
 	{
@@ -197,8 +197,28 @@ void * HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data)
 bool32 HashTableDelete(hash_table * HashTable, str8 Key)
 {
 	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
+	u32 Slot = SlotInfo.Slot;
 
-	// todo: implement this!
+	if (SlotInfo.Error || !SlotInfo.Match) return false;
+
+	u32 EndSlot = Slot;
+	while (HashTable->Hashes[EndSlot] % HashTable->TableSize != EndSlot)
+	{
+		EndSlot++;
+		if (EndSlot >= HashTable->TableSize) EndSlot = 0;
+	}
+
+	u32 Size = Slot - EndSlot;
+
+	OSMoveMemory(&HashTable->Hashes[Slot + 1], sizeof(hash_value) * Size, &HashTable->Hashes[Slot]);
+	OSMoveMemory(&HashTable->Data[Slot + 1], sizeof(str8) * Size, &HashTable->Data[Slot]);
+	OSMoveMemory(&HashTable->Keys[Slot + 1], sizeof(str8) * Size, &HashTable->Keys[Slot]);
+
+	OSZeroMemory(&HashTable->Hashes[EndSlot], sizeof(hash_value));
+	OSZeroMemory(&HashTable->Data[EndSlot], sizeof(str8));
+	OSZeroMemory(&HashTable->Keys[EndSlot], sizeof(str8));
+
+	HashTable->Count--;
 }
 
 blob HashTableGet(hash_table * HashTable, str8 Key)

@@ -29,7 +29,7 @@ typedef struct hash_table
 
 	u32 TableSize;
 	u32 DataSize;
-	u32 Occupied;
+	u32 Count;
 } hash_table;
 
 typedef struct hash_slot_info
@@ -37,6 +37,7 @@ typedef struct hash_slot_info
 	u32 NaturalSlot;
 	hash_value Hash;
 	u32 Slot;
+	bool32 Match;
 	bool32 Error;
 } hash_slot_info;
 
