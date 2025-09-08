@@ -135,20 +135,22 @@ hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize)
 	Result->DataSize = DataSize;
 }
 
-void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
+bool32 HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
 {
 	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
 	u32 Slot = SlotInfo.Slot;
 
 	if (SlotInfo.Error)
 	{
-		return 0;
+		return false;
 	}
 
 	if (SlotInfo.Match)
 	{
 		// replace value in existing slot
 		HashTable->Data[Slot] = Data;
+
+		return true;
 	}
 	else if (HashTable->Hashes[Slot] == 0)
 	{
@@ -179,19 +181,23 @@ void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
 		HashTable->Keys[Slot] = Key;
 
 		HashTable->Count++;
+
+		return true;
 	}
 	else
 	{
-		return 0;
+		return false;
 	}
 }
 
-void * HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data)
+bool32 HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data)
 {
 	if (HashTable->DataSize)
 	{
-		HashTableInsert(HashTable, Key, (blob) { .Data = Data, .Count = HashTable->DataSize });
+		return HashTableInsert(HashTable, Key, (blob) { .Data = Data, .Count = HashTable->DataSize });
 	}
+
+	return false;
 }
 
 bool32 HashTableDelete(hash_table * HashTable, str8 Key)
@@ -225,7 +231,9 @@ blob HashTableGet(hash_table * HashTable, str8 Key)
 {
 	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
 
+	if (SlotInfo.Error || !SlotInfo.Match) return (blob) { 0 };
 
+	return HashTable->Data[SlotInfo.Slot];
 }
 
 void * HashTableGetPtr(hash_table * HashTable, str8 Key)

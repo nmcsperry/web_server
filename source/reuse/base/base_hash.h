@@ -42,8 +42,8 @@ typedef struct hash_slot_info
 } hash_slot_info;
 
 hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize);
-void * HashTableInsert(hash_table * HashTable, str8 Key, blob Data);
-void * HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data);
+bool32 HashTableInsert(hash_table * HashTable, str8 Key, blob Data);
+bool32 HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data);
 bool32 HashTableDelete(hash_table * HashTable, str8 Key);
 blob HashTableGet(hash_table * HashTable, str8 Key);
 void * HashTableGetPtr(hash_table * HashTable, str8 Key);

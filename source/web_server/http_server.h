@@ -55,6 +55,13 @@ enum HTTPResponseBehavior
 	ResponseBehavior_RespondClose = 3
 };
 
+enum HTTPMimeType
+{
+	HTTPMimeType_Unknown = 0,
+	HTTPMimeType_HTML = 1,
+	HTTPMimeType_PNG = 2
+};
+
 typedef struct http_request
 {
 	bool32 Valid;
@@ -64,6 +71,7 @@ typedef struct http_request
 	u16 ResponseBehavior;
 	u16 ResponseHTTPCode;
 	str8 ResponseBody;
+	u16 ResponseMimeType;
 
 	u16 HTTPMethod;
 	str8 Path;

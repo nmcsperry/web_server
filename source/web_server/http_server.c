@@ -40,6 +40,16 @@ http_server ServerInit(socket_handle Socket)
 	return Result;
 }
 
+str8 Str8FromMimeType(u16 MimeType)
+{
+	switch (MimeType)
+	{
+		case HTTPMimeType_HTML: return Str8Lit("text/html; charset=UTF-8");
+		case HTTPMimeType_PNG: return Str8Lit("text/css");
+		default: return Str8Lit("application/octet-stream");
+	}
+}
+
 void ServerLoop(http_server * Server)
 {
 	// send responses for requests the application code has processed
@@ -76,6 +86,11 @@ void ServerLoop(http_server * Server)
 
 				if (Request->ResponseBody.Data)
 				{
+					if (Request->ResponseMimeType)
+					{
+						Str8WriteFmt(Buffer, "Content-Type: %{str8}\r\n", Str8FromMimeType(Request->ResponseMimeType));
+					}
+
 					Str8WriteFmt(Buffer, "Content-Length: %{u32}\r\n\r\n%{str8}", Request->ResponseBody.Count, Request->ResponseBody);
 				}
 				else
