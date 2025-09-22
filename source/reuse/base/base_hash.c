@@ -133,6 +133,8 @@ hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize)
 
 	Result->TableSize = TableSize;
 	Result->DataSize = DataSize;
+
+	return Result;
 }
 
 bool32 HashTableInsert(hash_table * HashTable, str8 Key, blob Data)

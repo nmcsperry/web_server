@@ -18,3 +18,16 @@ void FileOutputFilename(char * Filename, str8 String)
 	FileOutput(File, String);
 	FileClose(File);
 }
+
+/* str8 FileInputFilenameStr8(str8 Filename, memory_arena * Arena)
+{
+	memory_buffer * Scratch = ScratchBufferStart();
+	Str8WriteStr8(Scratch, Filename);
+	Str8WriteChar8(Scratch, '\0');
+
+	str8 Result = FileInputFilename(Str8FromBuffer(Scratch).Data, Arena);
+
+	ScratchBufferRelease(Scratch);
+
+	return Result;
+} */

@@ -140,7 +140,6 @@ str8 Str8NullTerminate(memory_arena * Arena, str8 String);
 str8 Utf8FromUtf16NullTerminate(memory_arena * Arena, str16 String);
 str8 Utf8FromUtf32NullTerminate(memory_arena * Arena, str32 String);
 
-
 str16 Str16NullTerminate(memory_arena * Arena, str16 String);
 str16 Utf16FromUtf8NullTerminate(memory_arena * Arena, str8 String);
 str16 Utf16FromUtf32NullTerminate(memory_arena * Arena, str32 String);
@@ -153,11 +152,13 @@ str32 Utf32FromUtf16NullTerminate(memory_arena * Arena, str16 String);
 
 str8_split Str8CutCount(str8 String, u32 Count);
 str8_split Str8CutFind(str8 String, str8 Match);
+str8_split Str8CutFindFromEnd(str8 String, str8 Match);
 
 i32 Str8MatchAny(str8 String, str8 * Matches, u32 MatchesCount, match_flags MatchFlags);
 bool32 Str8Match(str8 String, str8 Match, match_flags MatchFlags);
 bool32 Str8MatchPrefix(str8 String, str8 Match, match_flags MatchFlags);
 i32 Str8Find(str8 String, str8 Match, match_flags MatchFlags);
+i32 Str8FindFromEnd(str8 String, str8 Match, match_flags MatchFlags);
 
 // sub string
 

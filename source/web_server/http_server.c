@@ -45,7 +45,7 @@ str8 Str8FromMimeType(u16 MimeType)
 	switch (MimeType)
 	{
 		case HTTPMimeType_HTML: return Str8Lit("text/html; charset=UTF-8");
-		case HTTPMimeType_PNG: return Str8Lit("text/css");
+		case HTTPMimeType_PNG: return Str8Lit("image/png");
 		default: return Str8Lit("application/octet-stream");
 	}
 }

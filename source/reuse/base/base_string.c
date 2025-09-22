@@ -544,6 +544,21 @@ str8_split Str8CutFind(str8 String, str8 Match)
 	return (str8_split) { .First = String, .Second = Str8Empty() };
 }
 
+str8_split Str8CutFindFromEnd(str8 String, str8 Match)
+{
+	i32 CharIndex = Str8FindFromEnd(String, Match, MatchFlag_Normal);
+
+	if (CharIndex != -1)
+	{
+		str8_split FirstHalf = Str8CutCount(String, CharIndex);
+		str8_split SecondHalf = Str8CutCount(FirstHalf.Second, Match.Count);
+
+		return (str8_split) { .First = FirstHalf.First, .Second = SecondHalf.Second };
+	}
+
+	return (str8_split) { .First = String, .Second = Str8Empty() };
+}
+
 i32 Str8MatchAny(str8 String, str8 * Matches, u32 MatchesCount, match_flags MatchFlags)
 {
 	for (u32 MatchIndex = 0; MatchIndex < MatchesCount; MatchIndex++)
@@ -591,6 +606,8 @@ bool32 Str8MatchPrefix(str8 String, str8 Match, match_flags MatchFlags)
 
 i32 Str8Find(str8 String, str8 Match, match_flags MatchFlags)
 {
+	if (Match.Count > String.Count) return -1;
+
 	i32 CurrentMatchStart = -1;
 	i32 CurrentMatchIndex = 0;
 
@@ -607,6 +624,35 @@ i32 Str8Find(str8 String, str8 Match, match_flags MatchFlags)
 		} else {
 			CurrentMatchStart = -1;
 			CurrentMatchIndex = 0;
+		}
+	}
+	if (CurrentMatchIndex != Match.Count) return -1;
+	return CurrentMatchStart;
+}
+
+i32 Str8FindFromEnd(str8 String, str8 Match, match_flags MatchFlags)
+{
+	if (Match.Count > String.Count) return -1;
+
+	i32 CurrentMatchStart = -1;
+	i32 CurrentMatchIndex = Match.Count - 1;
+
+	// loop though string
+	for (u32 StringIndex = String.Count - Match.Count; StringIndex >= 0; StringIndex--)
+	{
+		if (String.Data[StringIndex] == Match.Data[CurrentMatchIndex])
+		{
+			CurrentMatchIndex--; // if we match, move match index forward
+
+			if (CurrentMatchStart == -1) {
+				CurrentMatchStart = StringIndex;
+			}
+
+			if (CurrentMatchIndex == 0) break;
+		}
+		else {
+			CurrentMatchStart = -1;
+			CurrentMatchIndex = Match.Count - 1;
 		}
 	}
 	if (CurrentMatchIndex != Match.Count) return -1;
