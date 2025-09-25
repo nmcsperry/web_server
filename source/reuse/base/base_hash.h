@@ -47,6 +47,29 @@ bool32 HashTableInsert(hash_table * HashTable, str8 Key, void * Data);
 bool32 HashTableDelete(hash_table * HashTable, str8 Key);
 void * HashTableGet(hash_table * HashTable, str8 Key);
 
+#else
+
+typedef struct hash_table_node hash_table_node;
+struct hash_table_node
+{
+	str8 Key;
+	hash_value Hash;
+
+	void * Data;
+	hash_table_node * Next;
+};
+
+typedef struct hash_table {
+	memory_arena * Arena;
+
+	hash_table_node ** Data;
+	u32 TableSize;
+} hash_table;
+
+hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize);
+bool32 HashTableInsert(hash_table * HashTable, str8 Key, void * Data);
+void * HashTableGet(hash_table * HashTable, str8 Key);
+
 #endif
 
 #ifdef __cplusplus

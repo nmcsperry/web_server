@@ -230,4 +230,62 @@ void * HashTableGet(hash_table * HashTable, str8 Key)
 	return HashTable->Data[SlotInfo.Slot];
 }
 
+#else
+
+hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize)
+{
+	hash_table * HashTable = ArenaPush(Arena, hash_table);
+	HashTable->TableSize = TableSize;
+	HashTable->Data = ArenaPushArray(Arena, hash_table_node *, TableSize);
+	HashTable->Arena = Arena;
+
+	return HashTable;
+}
+
+bool32 HashTableInsert(hash_table * HashTable, str8 Key, void * Data)
+{
+	hash_value Hash = HashStr8(Key);
+	u32 Slot = Hash % HashTable->TableSize;
+
+	hash_table_node * Node;
+	for (Node = HashTable->Data[Slot]; Node; Node = Node->Next)
+	{
+		if (Node->Hash == Hash && Str8Match(Node->Key, Key, 0))
+		{
+			break;
+		}
+	}
+
+	if (Node == 0)
+	{
+		hash_table_node * NewNode = ArenaPush(HashTable->Arena, hash_table_node);
+		SLLStackPush(HashTable->Data[Slot], NewNode);
+
+		NewNode->Data = Data;
+		NewNode->Hash = Hash;
+		NewNode->Key = Key;
+	}
+
+	return false;
+}
+
+void * HashTableGet(hash_table * HashTable, str8 Key)
+{
+	hash_value Hash = HashStr8(Key);
+	u32 Slot = Hash % HashTable->TableSize;
+
+	hash_table_node * Node;
+	for (Node = HashTable->Data[Slot]; Node; Node = Node->Next)
+	{
+		if (Node->Hash == Hash && Str8Match(Node->Key, Key, 0))
+		{
+			break;
+		}
+	}
+
+	if (Node == 0) return 0;
+	return Node->Data;
+}
+
+
 #endif
