@@ -78,7 +78,10 @@ hash_value HashContinueI32(hash_value Current, i32 Value)
 	return HashContinueU32(Current, (u32) Value);
 }
 
+#if 1
+
 // hash table
+// this is not well tested
 
 hash_slot_info HashTableGetSlot(hash_table * HashTable, str8 Key)
 {
@@ -123,7 +126,7 @@ hash_slot_info HashTableGetSlot(hash_table * HashTable, str8 Key)
 	return Result;
 }
 
-hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize)
+hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize)
 {
 	hash_table * Result = ArenaPushZero(Arena, hash_table);
 	Result->Arena = Arena;
@@ -132,12 +135,11 @@ hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize)
 	Result->Data = ArenaPushArrayZero(Arena, str8, TableSize);
 
 	Result->TableSize = TableSize;
-	Result->DataSize = DataSize;
 
 	return Result;
 }
 
-bool32 HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
+bool32 HashTableInsert(hash_table * HashTable, str8 Key, void * Data)
 {
 	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
 	u32 Slot = SlotInfo.Slot;
@@ -192,16 +194,6 @@ bool32 HashTableInsert(hash_table * HashTable, str8 Key, blob Data)
 	}
 }
 
-bool32 HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data)
-{
-	if (HashTable->DataSize)
-	{
-		return HashTableInsert(HashTable, Key, (blob) { .Data = Data, .Count = HashTable->DataSize });
-	}
-
-	return false;
-}
-
 bool32 HashTableDelete(hash_table * HashTable, str8 Key)
 {
 	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
@@ -229,16 +221,13 @@ bool32 HashTableDelete(hash_table * HashTable, str8 Key)
 	HashTable->Count--;
 }
 
-blob HashTableGet(hash_table * HashTable, str8 Key)
+void * HashTableGet(hash_table * HashTable, str8 Key)
 {
 	hash_slot_info SlotInfo = HashTableGetSlot(HashTable, Key);
 
-	if (SlotInfo.Error || !SlotInfo.Match) return (blob) { 0 };
+	if (SlotInfo.Error || !SlotInfo.Match) return 0;
 
 	return HashTable->Data[SlotInfo.Slot];
 }
 
-void * HashTableGetPtr(hash_table * HashTable, str8 Key)
-{
-	return HashTableGet(HashTable, Key).Data;
-}
+#endif

@@ -63,14 +63,14 @@ void InitAssetPage(memory_arena * Arena, hash_table * HashTable, char * FilePath
     Asset->Data = Data;
     Asset->MimeType = HTTPMimeType_PNG;
 
-    HashTableInsertPtr(HashTable, URL, Asset);
+    HashTableInsert(HashTable, URL, Asset);
 }
 
 hash_table * HashTable = 0;
 
 void InitAssetPages(memory_arena * Arena)
 {
-    HashTable = HashTableCreate(Arena, 64, sizeof(void *));
+    HashTable = HashTableCreate(Arena, 64);
     InitAssetPage(Arena, HashTable, "my_image.png", Str8Lit("/my_image.png"));
     InitAssetPage(Arena, HashTable, "cool_s.png", Str8Lit("/cool_s.png"));
 }
@@ -92,7 +92,7 @@ void EntryHook()
 		http_request * Request = 0;
 		while (Request = ServerNextRequest(&Server))
 		{
-            asset * Asset = HashTableGetPtr(HashTable, Request->Path);
+            asset * Asset = HashTableGet(HashTable, Request->Path);
             if (Asset)
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;

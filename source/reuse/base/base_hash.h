@@ -19,16 +19,17 @@ hash_value HashContinueI8(hash_value Current, i8 Value);
 hash_value HashContinueI16(hash_value Current, i16 Value);
 hash_value HashContinueI32(hash_value Current, i32 Value);
 
+#if 1
+
 typedef struct hash_table
 {
 	memory_arena * Arena;
 
 	hash_value * Hashes;
 	str8 * Keys;
-	str8 * Data;
+	void ** Data;
 
 	u32 TableSize;
-	u32 DataSize;
 	u32 Count;
 } hash_table;
 
@@ -41,12 +42,12 @@ typedef struct hash_slot_info
 	bool32 Error;
 } hash_slot_info;
 
-hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize, u32 DataSize);
-bool32 HashTableInsert(hash_table * HashTable, str8 Key, blob Data);
-bool32 HashTableInsertPtr(hash_table * HashTable, str8 Key, void * Data);
+hash_table * HashTableCreate(memory_arena * Arena, u32 TableSize);
+bool32 HashTableInsert(hash_table * HashTable, str8 Key, void * Data);
 bool32 HashTableDelete(hash_table * HashTable, str8 Key);
-blob HashTableGet(hash_table * HashTable, str8 Key);
-void * HashTableGetPtr(hash_table * HashTable, str8 Key);
+void * HashTableGet(hash_table * HashTable, str8 Key);
+
+#endif
 
 #ifdef __cplusplus
 }
