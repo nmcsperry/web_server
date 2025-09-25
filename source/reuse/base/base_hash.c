@@ -78,7 +78,7 @@ hash_value HashContinueI32(hash_value Current, i32 Value)
 	return HashContinueU32(Current, (u32) Value);
 }
 
-#if 1
+#if 0
 
 // hash table
 // this is not well tested

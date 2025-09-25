@@ -19,7 +19,7 @@ hash_value HashContinueI8(hash_value Current, i8 Value);
 hash_value HashContinueI16(hash_value Current, i16 Value);
 hash_value HashContinueI32(hash_value Current, i32 Value);
 
-#if 1
+#if 0
 
 typedef struct hash_table
 {
