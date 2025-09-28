@@ -40,16 +40,6 @@ http_server ServerInit(socket_handle Socket)
 	return Result;
 }
 
-str8 Str8FromMimeType(u16 MimeType)
-{
-	switch (MimeType)
-	{
-		case HTTPMimeType_HTML: return Str8Lit("text/html; charset=UTF-8");
-		case HTTPMimeType_PNG: return Str8Lit("image/png");
-		default: return Str8Lit("application/octet-stream");
-	}
-}
-
 void ServerLoop(http_server * Server)
 {
 	// send responses for requests the application code has processed
@@ -88,7 +78,7 @@ void ServerLoop(http_server * Server)
 				{
 					if (Request->ResponseMimeType)
 					{
-						Str8WriteFmt(Buffer, "Content-Type: %{str8}\r\n", Str8FromMimeType(Request->ResponseMimeType));
+						Str8WriteFmt(Buffer, "Content-Type: %{str8}\r\n", *Request->ResponseMimeType);
 					}
 
 					Str8WriteFmt(Buffer, "Content-Length: %{u32}\r\n\r\n%{str8}", Request->ResponseBody.Count, Request->ResponseBody);
@@ -465,22 +455,3 @@ http_request * ServerNextRequest(http_server * Server)
 
 	return 0;
 }
-
-/*
-typedef struct hollyoak_state {
-	u64 Timestamp;
-
-	u8 Hands[45];
-	u8 CurrentTrick[5];
-
-	u8 Scores[3]; // Scores[0] is P1 and P2, Scores[1] is P3 and P4, Scores[2] is P5
-
-	u8 DealingPlayerAndActivePlayer;
-	u8 RoundAndTrick;
-	u8 CurrentSeason;
-} hollyoak_state;
-
-typedef struct hollyoak_history {
-	hollyoak_state History[128];
-} hollyoak_history;
-*/

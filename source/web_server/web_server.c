@@ -44,14 +44,16 @@ str8 MainPage(http_server * Server, memory_arena * Arena)
 typedef struct asset
 {
     str8 Data;
-    u32 MimeType;
+    mime_type * MimeType;
 } asset;
 
-void InitAssetPage(memory_arena * Arena, hash_table * HashTable, char * FilePath, str8 URL)
+void InitAssetPage(memory_arena * Arena, hash_table * HashTable, char * FilePath, str8 URL, mime_type * MimeType)
 {
+    str8 Extension = Str8CutFindFromEnd(URL, Str8Lit(".")).Second;
+
     asset * Asset = ArenaPush(Arena, asset);
     Asset->Data = FileInputFilename(FilePath, Arena);
-    Asset->MimeType = HTTPMimeType_PNG;
+    Asset->MimeType = MimeType;
 
     HashTableInsert(HashTable, URL, Asset);
 }
@@ -62,7 +64,8 @@ void InitAssetPages(memory_arena * Arena)
 {
     HashTable = HashTableCreate(Arena, 64);
 
-    InitAssetPage(Arena, HashTable, "my_image.png", Str8Lit("/my_image.png"));
+    InitAssetPage(Arena, HashTable, "my_image.png", Str8Lit("/my_image.png"), &MimeType_PNG);
+    InitAssetPage(Arena, HashTable, "favicon.ico", Str8Lit("/favicon.ico"), &MimeType_ICO);
 }
 
 void EntryHook()
@@ -94,7 +97,7 @@ void EntryHook()
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseHTTPCode = 200;
-                Request->ResponseMimeType = HTTPMimeType_HTML;
+                Request->ResponseMimeType = &MimeType_HTML;
                 Request->ResponseBody = MainPage(&Server, Server.ResponseArena);
             }
 		}

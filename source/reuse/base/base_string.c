@@ -638,7 +638,7 @@ i32 Str8FindFromEnd(str8 String, str8 Match, match_flags MatchFlags)
 	i32 CurrentMatchIndex = Match.Count - 1;
 
 	// loop though string
-	for (u32 StringIndex = String.Count - Match.Count; StringIndex >= 0; StringIndex--)
+	for (i32 StringIndex = String.Count - Match.Count; StringIndex >= 0; StringIndex--)
 	{
 		if (String.Data[StringIndex] == Match.Data[CurrentMatchIndex])
 		{
@@ -648,14 +648,14 @@ i32 Str8FindFromEnd(str8 String, str8 Match, match_flags MatchFlags)
 				CurrentMatchStart = StringIndex;
 			}
 
-			if (CurrentMatchIndex == 0) break;
+			if (CurrentMatchIndex == -1) break;
 		}
 		else {
 			CurrentMatchStart = -1;
 			CurrentMatchIndex = Match.Count - 1;
 		}
 	}
-	if (CurrentMatchIndex != Match.Count) return -1;
+	if (CurrentMatchIndex != -1) return -1;
 	return CurrentMatchStart;
 }
 
