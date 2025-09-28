@@ -1557,6 +1557,7 @@ str8ll Str8LLFromStr8(memory_arena * Arena, str8 String)
 
 void Str8LLPush(memory_arena * Arena, str8ll * StringList, str8 String)
 {
+
 	str8_node * Node = Str8NodeFromStr8(Arena, String);
 	if (!StringList->First)
 	{

@@ -33,7 +33,9 @@ typedef struct http_connection
 	socket_handle Socket;
 	u64 LastCommunication; // Unix time in seconds
 	u64 FirstCommunication; // Unix time in seconds
-	u64 ResponsesSent;
+	u32 ResponsesSent;
+	u32 RequestsReceived;
+	str8ll RequestPathHistory;
 
 	ip_addr Address;
 
@@ -107,6 +109,7 @@ enum http_method
 mime_type MimeType_HTML = Str8LitInit("text/html; charset=utf-8");
 mime_type MimeType_PNG = Str8LitInit("image/png");
 mime_type MimeType_ICO = Str8LitInit("image/x-icon");
+mime_type MimeType_Text = Str8LitInit("text/plain");
 mime_type MimeType_Unknown = Str8LitInit("application/octet-stream");
 
 http_server ServerInit(socket_handle Socket);

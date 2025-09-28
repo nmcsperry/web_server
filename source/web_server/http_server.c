@@ -49,7 +49,8 @@ void ServerLoop(http_server * Server)
 		http_request_slot * Slot = &Server->Requests[I];
 		http_request * Request = &Slot->Value;
 
-		http_connection * Connection = Request->Valid ? &Server->Connections[Request->ConnectionIndex].Value : 0;
+		http_connection_slot * ConnectionSlot = Request->Valid ? &Server->Connections[Request->ConnectionIndex] : 0;
+		http_connection * Connection = ConnectionSlot ? &ConnectionSlot->Value : 0;
 		if (!Request->Valid || !Connection->Valid)
 		{
 			CloseRequest(Slot);
@@ -64,7 +65,7 @@ void ServerLoop(http_server * Server)
 
 				Str8WriteFmt(Buffer, "HTTP/1.1 %{u16} %{str8}\r\n", Request->ResponseHTTPCode, HTTPReasonName(Request->ResponseHTTPCode));
 
-				if (Request->ResponseBehavior && Request->ResponseHTTPCode >= 400)
+				if (Request->ResponseBehavior && Request->ResponseHTTPCode >= 500)
 				{
 					Request->ResponseBehavior |= ResponseBehavior_Close;
 				}
@@ -88,14 +89,18 @@ void ServerLoop(http_server * Server)
 					Str8WriteFmt(Buffer, "\r\n");
 				}
 
-				SocketOutput(Connection->Socket, Str8FromBuffer(Buffer));
+				str8 ResponseString = Str8FromBuffer(Buffer);
+				SocketOutput(Connection->Socket, ResponseString);
+
+				StdOutput(ResponseString);
+				StdOutput(Str8Lit("END"));
 
 				ScratchBufferRelease(Buffer);
 			}
 
 			if (Request->ResponseBehavior & ResponseBehavior_Close)
 			{
-				CloseConnection(Server, Connection, 0);
+				CloseConnection(Server, ConnectionSlot, 0);
 			}
 			else if (Request->ResponseBehavior & ResponseBehavior_Respond)
 			{
@@ -226,6 +231,11 @@ http_request_slot * AddRequest(http_server * Server, http_connection_slot * Conn
 	Request->Value.Body = ArenaPushStr8(Request->Arena, Parser->Body);
 	Request->Value.ResponseBehavior = ResponseBehavior_Ignore;
 
+	Connection->Value.RequestsReceived++;
+	str8 PathSafe = ArenaPushStr8(Server->Arena, Request->Value.Path);
+	Str8LLPush(Server->Arena, &Connection->Value.RequestPathHistory, Str8Lit(" - "));
+	Str8LLPush(Server->Arena, &Connection->Value.RequestPathHistory, PathSafe);
+
 	return Request;
 }
 
@@ -237,11 +247,11 @@ str8 HTTPReasonName(u16 Reason)
 	case 204: return Str8Lit("No Content");
 
 	case 400: return Str8Lit("Bad Request");
-	case 404: return Str8Lit("Length Required");
+	case 404: return Str8Lit("Not Found");
 	case 408: return Str8Lit("Content Too Large");
 	case 411: return Str8Lit("Request Header Fields Too Large");
 	case 413: return Str8Lit("Request Timeout");
-	case 431: return Str8Lit("Not Found");
+	case 431: return Str8Lit("Length Required");
 
 	case 500: return Str8Lit("Internal Server Error");
 

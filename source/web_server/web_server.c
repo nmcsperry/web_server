@@ -10,6 +10,26 @@
 #include "http_server.c"
 #include "html.c"
 
+str8 NotFoundPage(http_server * Server, memory_arena * Arena)
+{
+    html_writer Writer = HTMLWriterCreate(Arena);
+
+    HTMLTag(&Writer, HTMLTag_head)
+    {
+        HTMLTag(&Writer, HTMLTag_title)
+        {
+            HTMLText(&Writer, Str8Lit("404 Not Found"));
+        }
+    }
+
+    HTMLTag(&Writer, HTMLTag_body)
+    {
+        HTMLSimpleTagCStr(&Writer, HTMLTag_p, "Requested Page Not Found");
+    }
+
+    return Str8FromHTML(Arena, Writer.DocumentRoot);
+}
+
 str8 MainPage(http_server * Server, memory_arena * Arena)
 {
     html_writer Writer = HTMLWriterCreate(Arena);
@@ -34,6 +54,13 @@ str8 MainPage(http_server * Server, memory_arena * Arena)
                 HTMLSimpleTag(&Writer, HTMLTag_p, Str8FromIPAddr(Writer.Arena, Connection->Value.Address));
                 datetime Datetime = DatetimeFromUnixTimeSec(Connection->Value.FirstCommunication);
                 HTMLSimpleTag(&Writer, HTMLTag_p, Str8FromDatetime(Writer.Arena, Datetime));
+
+                temp_memory_arena Scratch = GetScratchArena(0, 0);
+                str8 RequestPathHistoryString = Str8FromStr8LL(Arena, Connection->Value.RequestPathHistory);
+                HTMLSimpleTag(&Writer, HTMLTag_p, RequestPathHistoryString);
+                ReleaseScratchArena(Scratch);
+
+                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "%{u32}", Connection->Value.RequestsReceived);
             }
         }
     }
@@ -93,12 +120,19 @@ void EntryHook()
                 Request->ResponseMimeType = Asset->MimeType;
                 Request->ResponseBody = Asset->Data;
             }
-            else
+            else if (Str8Match(Request->Path, Str8Lit("/"), 0))
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseHTTPCode = 200;
-                Request->ResponseMimeType = &MimeType_HTML;
                 Request->ResponseBody = MainPage(&Server, Server.ResponseArena);
+                Request->ResponseMimeType = &MimeType_HTML;
+            }
+            else
+            {
+                Request->ResponseBehavior = ResponseBehavior_Respond;
+                Request->ResponseHTTPCode = 404;
+                Request->ResponseBody = NotFoundPage(&Server, Server.ResponseArena);
+                Request->ResponseMimeType = &MimeType_HTML;
             }
 		}
 	}
