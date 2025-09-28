@@ -83,6 +83,18 @@ f64 F64Tan(f64 A) {
 	return tan(A);
 }
 
+i32 I32Abs(i32 A)
+{
+	if (A < 0) return -1 * A;
+	return A;
+}
+
+i64 I64Abs(i64 A)
+{
+	if (A < 0) return -1 * A;
+	return A;
+}
+
 // vectors
 
 i32_v2 I32V2(i32 X, i32 Y) {

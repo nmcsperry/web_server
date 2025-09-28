@@ -195,6 +195,7 @@
     <ClCompile Include="source\reuse\base\base_os\win32\base_win32_memory.c" />
     <ClCompile Include="source\reuse\base\base_os\win32\base_win32_time.c" />
     <ClCompile Include="source\reuse\base\base_string.c" />
+    <ClCompile Include="source\reuse\base\base_time.c" />
     <ClCompile Include="source\reuse\base\base_types.c" />
     <ClCompile Include="source\reuse\io\io_basic.c" />
     <ClCompile Include="source\reuse\io\io_file.c" />
@@ -296,6 +297,7 @@
     <ClInclude Include="source\reuse\base\base_os\base_os_memory.h" />
     <ClInclude Include="source\reuse\base\base_os\base_os_time.h" />
     <ClInclude Include="source\reuse\base\base_string.h" />
+    <ClInclude Include="source\reuse\base\base_time.h" />
     <ClInclude Include="source\reuse\base\base_types.h" />
     <ClInclude Include="source\reuse\base\base_util.h" />
     <ClInclude Include="source\reuse\io\io_basic.h" />

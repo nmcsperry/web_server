@@ -32,7 +32,10 @@ typedef struct http_connection
 
 	socket_handle Socket;
 	u64 LastCommunication; // Unix time in seconds
+	u64 FirstCommunication; // Unix time in seconds
 	u64 ResponsesSent;
+
+	ip_addr Address;
 
 	http_request_parser RequestParser;
 } http_connection;
@@ -109,7 +112,7 @@ enum http_method
 http_server ServerInit(socket_handle Socket);
 void ServerLoop(http_server * Server);
 
-http_connection_slot * AddConnection(http_server * Server, socket_handle Socket);
+http_connection_slot * AddConnection(http_server * Server, socket_handle Socket, ip_addr Address);
 bool8 CloseConnection(http_server * Server, http_connection_slot * Connection, u16 Reason);
 
 bool8 CloseRequest(http_request_slot * RequestSlot);

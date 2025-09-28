@@ -160,7 +160,7 @@ str8 Str8FromIPAddr(memory_arena * Arena, ip_addr Address)
 
 		for (i32 I = 0; I < 8; I++)
 		{
-			Str8WriteHexDigits(Buffer, SwapByteOrderU16(Address.AddrU16[7 - I]), 1);
+			Str8WriteHexDigits(Buffer, SwapByteOrderU16(Address.AddrU16[I]), 4);
 			if (I != 7) { Str8WriteChar8(Buffer, ':'); }
 		}
 
@@ -172,7 +172,7 @@ str8 Str8FromIPAddr(memory_arena * Arena, ip_addr Address)
 
 		for (i32 I = 0; I < 4; I++)
 		{
-			Str8WriteInt(Buffer, Address.AddrU8[3 - I]);
+			Str8WriteInt(Buffer, Address.AddrU8[I]);
 			if (I != 3) { Str8WriteChar8(Buffer, '.'); }
 		}
 

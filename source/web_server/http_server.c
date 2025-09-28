@@ -124,9 +124,10 @@ void ServerLoop(http_server * Server)
 
 	for (i32 I = 0; I < 16; I++)
 	{
-		if (SocketAccept(Server->ServerSocket, &NewConnectionSocket, 0))
+		ip_addr Address;
+		if (SocketAccept(Server->ServerSocket, &NewConnectionSocket, &Address))
 		{
-			if (!AddConnection(Server, NewConnectionSocket))
+			if (!AddConnection(Server, NewConnectionSocket, Address))
 			{
 				SocketClose(NewConnectionSocket);
 			}
@@ -258,7 +259,7 @@ str8 HTTPReasonName(u16 Reason)
 	}
 }
 
-http_connection_slot * AddConnection(http_server * Server, socket_handle Socket)
+http_connection_slot * AddConnection(http_server * Server, socket_handle Socket, ip_addr Address)
 {
 	http_connection_slot * Connection = 0;
 
@@ -281,6 +282,8 @@ http_connection_slot * AddConnection(http_server * Server, socket_handle Socket)
 	Connection->Value.Socket = Socket;
 	Connection->Value.RequestParser = (http_request_parser) { 0 };
 	Connection->Value.LastCommunication = UnixTimeSec();
+	Connection->Value.FirstCommunication = UnixTimeSec();
+	Connection->Value.Address = Address;
 
 	SocketPollingAdd(Server->Polling, Socket, Connection->Index);
 

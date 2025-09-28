@@ -10,7 +10,7 @@
 #include "http_server.c"
 #include "html.c"
 
-str8 MainPage(memory_arena * Arena)
+str8 MainPage(http_server * Server, memory_arena * Arena)
 {
     html_writer Writer = HTMLWriterCreate(Arena);
 
@@ -24,26 +24,17 @@ str8 MainPage(memory_arena * Arena)
 
     HTMLTag(&Writer, HTMLTag_body)
     {
-        HTMLTag(&Writer, HTMLTag_p)
+        for (u32 I = 0; I < ArrayCount(Server->Connections); I++)
         {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
-            HTMLText(&Writer, Str8Lit("Red"));
-        }
+            http_connection_slot * Connection = &Server->Connections[I];
 
-        HTMLTag(&Writer, HTMLTag_p)
-        {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("blue"));
-            HTMLText(&Writer, Str8Lit("Blue"));
-        }
-
-        HTMLTag(&Writer, HTMLTag_img)
-        {
-            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("my_image.png"));
-        }
-
-        HTMLTag(&Writer, HTMLTag_img)
-        {
-            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("cool_s.png"));
+            if (Connection->Value.Valid)
+            {
+                HTMLSimpleTagCStr(&Writer, HTMLTag_h3, "Connection");
+                HTMLSimpleTag(&Writer, HTMLTag_p, Str8FromIPAddr(Writer.Arena, Connection->Value.Address));
+                datetime Datetime = DatetimeFromUnixTimeSec(Connection->Value.FirstCommunication);
+                HTMLSimpleTag(&Writer, HTMLTag_p, Str8FromDatetime(Writer.Arena, Datetime));
+            }
         }
     }
 
@@ -72,7 +63,6 @@ void InitAssetPages(memory_arena * Arena)
     HashTable = HashTableCreate(Arena, 64);
 
     InitAssetPage(Arena, HashTable, "my_image.png", Str8Lit("/my_image.png"));
-    InitAssetPage(Arena, HashTable, "cool_s.png", Str8Lit("/cool_s.png"));
 }
 
 void EntryHook()
@@ -105,7 +95,7 @@ void EntryHook()
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseHTTPCode = 200;
                 Request->ResponseMimeType = HTTPMimeType_HTML;
-                Request->ResponseBody = MainPage(Server.ResponseArena);
+                Request->ResponseBody = MainPage(&Server, Server.ResponseArena);
             }
 		}
 	}

@@ -193,6 +193,8 @@ bool32 SocketAccept(socket_handle OurSocket, socket_handle * ConnectionSocket, i
 			SOCKADDR_IN * IPv4AddressInfo = (SOCKADDR_IN *) &AddressInfo;
 			Address->AddrU32[0] = IPv4AddressInfo->sin_addr.s_addr;
 			Address->AddrU32[1] = SwapByteOrderU32(0x0000ffff); // This means it's IPv4
+			Address->AddrU32[2] = 0;
+			Address->AddrU32[3] = 0;
 		}
 	}
 	else if (AddressInfo.ss_family == AF_INET6)

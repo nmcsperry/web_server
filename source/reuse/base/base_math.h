@@ -69,6 +69,9 @@ f64 F64Sin(f64 A);
 f32 F32Cos(f32 A);
 f64 F64Cos(f64 A);
 
+i32 I32Abs(i32 A);
+i64 I64Abs(i64 A);
+
 // vectors
 
 typedef struct i32_v2 {

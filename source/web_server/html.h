@@ -34,6 +34,9 @@ HTMLTagDef(body);
 HTMLTagDef(head);
 HTMLTagDef(title);
 HTMLTagDef(p);
+HTMLTagDef(h1);
+HTMLTagDef(h2);
+HTMLTagDef(h3);
 HTMLTagDef(img);
 
 HTMLAttrDef(src);

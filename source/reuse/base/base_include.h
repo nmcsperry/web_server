@@ -10,6 +10,7 @@
 #include "base_math.h"
 #include "base_string.h"
 #include "base_bits.h"
+#include "base_time.h"
 #include "base_format.h"
 #include "base_hash.h"
 

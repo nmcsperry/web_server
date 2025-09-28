@@ -144,6 +144,42 @@ html_node * HTMLText(html_writer * Writer, str8 Text)
     Writer->CurrentTag->Content = Text;
 }
 
+html_node * HTMLTextCStr(html_writer * Writer, char * CStr)
+{
+    Writer->CurrentTag->Content = Str8FromCStr(CStr);
+}
+
+html_node * HTMLSimpleTag(html_writer * Writer, html_node_type * Type, str8 String)
+{
+    HTMLTag(Writer, Type)
+    {
+        HTMLText(Writer, String);
+    }
+}
+
+html_node * HTMLSimpleTagCStr(html_writer * Writer, html_node_type * Type, char * CStr)
+{
+    HTMLTag(Writer, Type)
+    {
+        HTMLTextCStr(Writer, CStr);
+    }
+}
+
+html_node * HTMLSimpleTagFmt(html_writer * Writer, html_node_type * Type, char * FormatCStr, ...)
+{
+    va_list FormatArguments;
+    va_start(FormatArguments, FormatCStr);
+
+    str8 Result = Str8FmtCore(Writer->Arena, Str8FromCStr(FormatCStr), FormatArguments);
+
+    va_end(FormatArguments);
+
+    HTMLTag(Writer, Type)
+    {
+        HTMLText(Writer, Result);
+    }
+}
+
 html_node * HTMLTextFmt(html_writer * Writer, char * FormatCStr, ...)
 {
     va_list FormatArguments;
