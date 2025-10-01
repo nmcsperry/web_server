@@ -72,6 +72,13 @@ void * HashTableGet(hash_table * HashTable, str8 Key);
 
 #endif
 
+typedef struct sha1
+{
+	u32 E[5];
+} sha1;
+
+sha1 CalculateSHA1(blob Message);
+
 #ifdef __cplusplus
 }
 #endif

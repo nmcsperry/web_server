@@ -25,7 +25,17 @@ void SwapByteOrderU128(u64 * A, u64 * B)
 	*B = SwapByteOrderU64(TempA);
 }
 
-// todo: add stuff like these:
+u32 LeftRotate(u32 Value, u32 Amount)
+{
+	return Value << Amount | Value >> (32 - Amount);
+}
+
+u32 RightRotate(u32 Value, u32 Amount)
+{
+	return Value >> Amount | Value << (32 - Amount);
+}
+
+// todo: maybe add stuff like these:
 // SwapByteOrderToLittleEndianU16() 
 // SwapByteOrderToLittleEndianU32()
 // SwapByteOrderToLittleEndianU64()

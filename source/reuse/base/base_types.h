@@ -78,6 +78,9 @@ u32 SwapByteOrderU32(u32 Input);
 u64 SwapByteOrderU64(u64 Input);
 void SwapByteOrderU128(u64 * A, u64 * B);
 
+u32 LeftRotate(u32 Value, u32 Amount);
+u32 RightRotate(u32 Value, u32 Amount);
+
 #ifdef __cplusplus
 }
 #endif

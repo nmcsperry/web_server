@@ -287,5 +287,106 @@ void * HashTableGet(hash_table * HashTable, str8 Key)
 	return Node->Data;
 }
 
-
 #endif
+
+sha1 CalculateSHA1Core(sha1 Hash, u32 * Chunk)
+{
+	u32 W[80] = { 0 };
+	// OSCopyMemory(W, Chunk, sizeof(u32) * 16);
+
+	u32 A = Hash.E[0];
+	u32 B = Hash.E[1];
+	u32 C = Hash.E[2];
+	u32 D = Hash.E[3];
+	u32 E = Hash.E[4];
+
+	for (i32 I = 0; I < 16; I++)
+	{
+		W[I] = SwapByteOrderU32(Chunk[I]);
+	}
+
+	for (i32 I = 16; I < 80; I++)
+	{
+		W[I] = LeftRotate(W[I - 3] ^ W[I - 8] ^ W[I - 14] ^ W[I - 16], 1);
+	}
+
+	for (i32 I = 0; I < 80; I++)
+	{
+		u32 F = 0, K = 0;
+		if (I < 20)
+		{
+			F = (B & C) | ((~B) & D);
+			K = 0x5A827999;
+		}
+		else if (I < 40)
+		{
+			F = B ^ C ^ D;
+			K = 0x6ED9EBA1;
+		}
+		else if (I < 60)
+		{
+			F = B & C | B & D | C & D;
+			K = 0x8F1BBCDC;
+		}
+		else if (I < 80)
+		{
+			F = B ^ C ^ D;
+			K = 0xCA62C1D6;
+		}
+
+		u32 Temp = LeftRotate(A, 5) + F + E + K + W[I];
+		E = D;
+		D = C;
+		C = LeftRotate(B, 30);
+		B = A;
+		A = Temp;
+	}
+
+	Hash.E[0] += A;
+	Hash.E[1] += B;
+	Hash.E[2] += C;
+	Hash.E[3] += D;
+	Hash.E[4] += E;
+
+	return Hash;
+}
+
+sha1 CalculateSHA1(blob Message)
+{
+	u64 MessageLength = Message.Count * 8;
+
+	sha1 Hash = {
+		.E = {
+			0x67452301,
+			0xEFCDAB89,
+			0x98BADCFE,
+			0x10325476,
+			0xC3D2E1F0
+		}
+	};
+
+	while (Message.Count >= 64)
+	{
+		Hash = CalculateSHA1Core(Hash, Message.Data);
+
+		Message.Count -= 64;
+		Message.Data += 64;
+	}
+
+	u32 ExtraChunk[16] = { 0 };
+	u8 * ExtraChunkU8 = &ExtraChunk[0];
+	u64 * ExtraChunkU64 = &ExtraChunk[0];
+
+	OSCopyMemory(ExtraChunkU8, Message.Data, Message.Count);
+	ExtraChunkU8[Message.Count] = 0x80;
+	if (Message.Count >= 56)
+	{
+		Hash = CalculateSHA1Core(Hash, ExtraChunk);
+		OSZeroMemory(ExtraChunk, sizeof(ExtraChunk));
+	}
+
+	ExtraChunkU64[7] = SwapByteOrderU64(MessageLength);
+	Hash = CalculateSHA1Core(Hash, ExtraChunk);
+
+	return Hash;
+}
