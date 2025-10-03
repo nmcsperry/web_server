@@ -190,7 +190,20 @@ void ServerLoop(http_server * Server)
 				}
 				else
 				{
-					AddRequest(Server, Connection);
+					http_request * Request = &AddRequest(Server, Connection)->Value;
+
+					if (Connection->Value.ConnectionType == 0)
+					{
+						if (Request->RequestType == HttpRequestType_HTTP)
+						{
+							Connection->Value.ConnectionType = HttpConnectionType_HTTP;
+						}
+						else if (Request->RequestType == HttpRequestType_WebSocketHandshake)
+						{
+							Connection->Value.ConnectionType = HttpConnectionType_WebSocket;
+						}
+					}
+
 					OSZeroMemory(Parser, sizeof(http_request_parser));
 				}
 			}
@@ -225,6 +238,7 @@ http_request_slot * AddRequest(http_server * Server, http_connection_slot * Conn
 	http_request_parser * Parser = &Connection->Value.RequestParser;
 
 	Request->Value.Valid = true;
+	Request->Value.RequestType = HttpRequestType_HTTP;
 	Request->Value.ConnectionIndex = Connection->Index;
 	Request->Value.HTTPMethod = Parser->HTTPMethod;
 	Request->Value.Path = ArenaPushStr8(Request->Arena, Parser->Path);
@@ -279,6 +293,7 @@ http_connection_slot * AddConnection(http_server * Server, socket_handle Socket,
 	}
 
 	Connection->Value.Valid = true;
+	Connection->Value.ConnectionType = HttpConnectionType_Unknown;
 	Connection->Value.Socket = Socket;
 	Connection->Value.RequestParser = (http_request_parser) { 0 };
 	Connection->Value.LastCommunication = UnixTimeSec();

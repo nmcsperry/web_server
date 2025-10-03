@@ -17,18 +17,24 @@ typedef struct http_request_parser
 	bool8 ContentLengthComplete;
 	bool8 BodyComplete;
 
-	u32 HTTPError; // 400 Bad Request, 411 Length Required, 413 Content Too Large, 431 Request Header Fields Too Large, 408 Request Timeout
+	u32 HTTPError;
 	u32 ContentLength;
-	// bool32 CloseConnection;
 
 	u16 HTTPMethod;
 	str8 Path;
 	str8 Body;
 } http_request_parser;
 
+enum http_connection_type {
+	HttpConnectionType_Unknown,
+	HttpConnectionType_HTTP,
+	HttpConnectionType_WebSocket
+};
+
 typedef struct http_connection
 {
 	bool32 Valid;
+	u32 ConnectionType;
 
 	socket_handle Socket;
 	u64 LastCommunication; // Unix time in seconds
@@ -62,11 +68,20 @@ enum HTTPResponseBehavior
 
 typedef str8 mime_type;
 
+enum http_request_type
+{
+	HttpRequestType_Unknown,
+	HttpRequestType_HTTP,
+	HttpRequestType_WebSocketHandshake,
+	HttpRequestType_WebSocketFrame
+};
+
 typedef struct http_request
 {
 	bool32 Valid;
 	bool32 Processed;
 	u32 ConnectionIndex;
+	u32 RequestType;
 
 	u16 ResponseBehavior;
 	u16 ResponseHTTPCode;
