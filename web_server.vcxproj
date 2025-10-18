@@ -173,14 +173,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="source\app\web_server\database.c" />
-    <ClCompile Include="source\app\web_server\http_server.c" />
-    <ClCompile Include="source\app\web_server\web_server.c" />
-    <ClCompile Include="source\app\web_server\web_server_include.c" />
-    <ClCompile Include="source\reuse\app\starling\bitmap.c" />
-    <ClCompile Include="source\reuse\app\starling\starling.c" />
-    <ClCompile Include="source\reuse\app\web_server\http_server.c" />
-    <ClCompile Include="source\reuse\app\web_server\web_server.c" />
     <ClCompile Include="source\reuse\base\base_bits.c" />
     <ClCompile Include="source\reuse\base\base_entry.c" />
     <ClCompile Include="source\reuse\base\base_format.c" />
@@ -214,37 +206,6 @@
     <ClCompile Include="source\start.c">
       <IncludeInUnityFile>false</IncludeInUnityFile>
     </ClCompile>
-    <ClCompile Include="source\app\magpie\magpie.c" />
-    <ClCompile Include="source\base\base_bits.c" />
-    <ClCompile Include="source\base\base_entry.c" />
-    <ClCompile Include="source\base\base_format.c" />
-    <ClCompile Include="source\base\base_hash.c" />
-    <ClCompile Include="source\base\base_include.c" />
-    <ClCompile Include="source\base\base_logging.c" />
-    <ClCompile Include="source\base\base_math.c" />
-    <ClCompile Include="source\base\base_memory.c" />
-    <ClCompile Include="source\base\base_os\base_os_include.c" />
-    <ClCompile Include="source\base\base_os\win32\base_win32_memory.c" />
-    <ClCompile Include="source\base\base_os\win32\base_win32_time.c" />
-    <ClCompile Include="source\base\base_string.c" />
-    <ClCompile Include="source\base\base_types.c" />
-    <ClCompile Include="source\io\io_basic.c" />
-    <ClCompile Include="source\io\io_file.c" />
-    <ClCompile Include="source\io\io_include.c" />
-    <ClCompile Include="source\io\io_os\io_os_include.c" />
-    <ClCompile Include="source\io\io_os\win32\io_win32_basic.c" />
-    <ClCompile Include="source\io\io_os\win32\io_win32_exe.c" />
-    <ClCompile Include="source\io\io_os\win32\io_win32_file.c" />
-    <ClCompile Include="source\network\network_include.c" />
-    <ClCompile Include="source\network\network_poll.c" />
-    <ClCompile Include="source\network\network_socket.c" />
-    <ClCompile Include="source\network\network_os\network_os_include.c" />
-    <ClCompile Include="source\network\network_os\win32\network_win32_internal.c" />
-    <ClCompile Include="source\network\network_os\win32\network_win32_poll.c" />
-    <ClCompile Include="source\network\network_os\win32\network_win32_socket.c" />
-    <ClCompile Include="source\platform\platform_include.c" />
-    <ClCompile Include="source\platform\platform_os\platform_os_include.c" />
-    <ClCompile Include="source\platform\platform_os\win32\platform_win32_window.c" />
     <ClCompile Include="source\web_server\html.c" />
     <ClCompile Include="source\web_server\http_server.c" />
     <ClCompile Include="source\web_server\web_server.c" />
@@ -284,7 +245,6 @@
     <ClInclude Include="source\platform\platform_include.h" />
     <ClInclude Include="source\platform\platform_os\platform_os_include.h" />
     <ClInclude Include="source\platform\platform_os\win32\platform_win32_window.h" />
-    <ClInclude Include="source\reuse\app\web_server\http_server.h" />
     <ClInclude Include="source\reuse\base\base_bits.h" />
     <ClInclude Include="source\reuse\base\base_entry.h" />
     <ClInclude Include="source\reuse\base\base_format.h" />

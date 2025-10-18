@@ -10,50 +10,32 @@
 #define HTTP_CONNECTION_TIMEOUT 200
 #define HTTP_CONNECTION_TIMEOUT_MIDREQUEST 100
 
-typedef struct http_request_parser
-{
-	bool8 MethodComplete;
-	bool8 HeadersComplete;
-	bool8 ContentLengthComplete;
-	bool8 BodyComplete;
-
-	u32 HTTPError;
-	u32 ContentLength;
-
-	u16 HTTPMethod;
-	str8 Path;
-	str8 Body;
-} http_request_parser;
-
-enum http_connection_type {
-	HttpConnectionType_Unknown,
-	HttpConnectionType_HTTP,
-	HttpConnectionType_WebSocket
-};
-
 typedef struct http_connection
 {
 	bool32 Valid;
-	u32 ConnectionType;
+	u32 ProtocolType;
 
 	socket_handle Socket;
-	u64 LastCommunication; // Unix time in seconds
 	u64 FirstCommunication; // Unix time in seconds
+	u64 LastCommunication; // Unix time in seconds
 	u32 ResponsesSent;
 	u32 RequestsReceived;
+
+	str8 WebSocketPath;
+
 	str8ll RequestPathHistory;
 
-	ip_addr Address;
+	u32 ParsingRequestIndex;
+	bool32 IsParsingRequest;
 
-	http_request_parser RequestParser;
+	ip_addr Address;
 } http_connection;
 
 typedef struct http_connection_slot {
 	u32 Index;
 
-	memory_arena * ParsingArena;
+	memory_arena * Arena;
 	memory_buffer Unparsed;
-	temp_memory_arena Initial;
 
 	http_connection Value;
 } http_connection_slot;
@@ -68,29 +50,45 @@ enum HTTPResponseBehavior
 
 typedef str8 mime_type;
 
-enum http_request_type
+enum web_protocol_type
 {
-	HttpRequestType_Unknown,
-	HttpRequestType_HTTP,
-	HttpRequestType_WebSocketHandshake,
-	HttpRequestType_WebSocketFrame
+	WebProtocol_HTTP,
+	WebProtocol_WebSocket
+};
+
+enum http_request_status
+{
+	HTTPRequest_Invalid,
+	HTTPRequest_Parsing,
+	HTTPRequest_Ready,
+	HTTPRequest_Processed
 };
 
 typedef struct http_request
 {
-	bool32 Valid;
-	bool32 Processed;
+	u32 Status;
+
+	bool8 RequestMethodComplete;
+	bool8 RequestHeadersComplete;
+	bool8 RequestContentLengthComplete;
+	bool8 RequestBodyComplete;
+
+	u32 RequestHTTPMethod;
+	str8 RequestPath;
+	str8 RequestBody;
+	u32 RequestContentLength;
+
+	u32 RequestProtocolSwitch;
+	str8 RequestWebSocketKey;
+
 	u32 ConnectionIndex;
-	u32 RequestType;
 
 	u16 ResponseBehavior;
 	u16 ResponseHTTPCode;
 	str8 ResponseBody;
 	mime_type * ResponseMimeType;
 
-	u16 HTTPMethod;
-	str8 Path;
-	str8 Body;
+	str8 ResponseWebSocketAccept;
 } http_request;
 
 typedef struct http_request_slot

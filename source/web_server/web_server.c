@@ -97,9 +97,6 @@ void InitAssetPages(memory_arena * Arena)
 
 void EntryHook()
 {
-    sha1 test = CalculateSHA1(Str8Lit("a"));
-    StdOutputFmt("%{hex32}%{hex32}%{hex32}%{hex32}%{hex32}", test.E[0], test.E[1], test.E[2], test.E[3], test.E[4]);
-
 	SocketInit();
 
     memory_arena * AssetArena = ArenaCreate(Megabytes(64));
@@ -115,7 +112,7 @@ void EntryHook()
 		http_request * Request = 0;
 		while (Request = ServerNextRequest(&Server))
 		{
-            asset * Asset = HashTableGet(AssetHashTable, Request->Path);
+            asset * Asset = HashTableGet(AssetHashTable, Request->RequestPath);
             if (Asset)
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
@@ -123,7 +120,7 @@ void EntryHook()
                 Request->ResponseMimeType = Asset->MimeType;
                 Request->ResponseBody = Asset->Data;
             }
-            else if (Str8Match(Request->Path, Str8Lit("/"), 0))
+            else if (Str8Match(Request->RequestPath, Str8Lit("/"), 0))
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseHTTPCode = 200;

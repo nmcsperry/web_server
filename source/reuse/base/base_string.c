@@ -703,6 +703,27 @@ str8 Str8SubstrFromFinds(str8 String, str8 Start, str8 End, bool32 RequireEnd)
 	return Str8Substr(String, 0, EndIndex);
 }
 
+str8 Str8Trim(str8 String)
+{
+	String = Str8ParseEatWhitespace(&String);
+
+	u32 Index = 0;
+	while (Index < String.Count && Char8Match(String.Data[String.Count - 1 - Index], Char8ClassWhitespace, 0))
+	{
+		Index++;
+	}
+
+	return (str8) { .Data = String.Data, .Count = String.Count - Index };
+}
+
+str8 Str8Concat(memory_arena * Arena, str8 A, str8 B)
+{
+	memory_buffer * Buffer = ScratchBufferStart();
+	Str8WriteStr8(Buffer, A);
+	Str8WriteStr8(Buffer, B);
+	return ScratchBufferEndStr8(Buffer, Arena);
+}
+
 // parse
 
 str8 Str8ParseEat(str8 * String, u32 Count)

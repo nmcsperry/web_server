@@ -167,6 +167,11 @@ str8 Str8SubstrExtend(str8 Substr, str8 String, u32 Extend);
 
 str8 Str8SubstrFromFinds(str8 String, str8 Start, str8 End, bool32 RequireEnd);
 
+// other
+
+str8 Str8Trim(str8 String);
+str8 Str8Concat(memory_arena * Arena, str8 A, str8 B);
+
 // parse
 
 str8 Str8ParseEat(str8 * String, u32 Count);
@@ -182,7 +187,7 @@ str8 Str8ParseEatWhileCharMatch(str8 * String, char8_class CharClass);
 str8_bool32 Str8ParseEatUntilStr8Match(str8 * String, str8 Match);
 str8 Str8ParseEatWhitespace(str8 * String);
 
-// these won't work well if they encounter even slightly weird characters!
+// todo: these won't work well if they encounter even slightly weird characters!
 str8 Str8ParseNextToken(str8 * String);
 str8 Str8ParseNextTokenWithWhitespace(str8 * String);
 
