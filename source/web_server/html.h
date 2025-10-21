@@ -38,8 +38,10 @@ HTMLTagDef(h1);
 HTMLTagDef(h2);
 HTMLTagDef(h3);
 HTMLTagDef(img);
+HTMLTagDef(script);
 
 HTMLAttrDef(src);
+HTMLAttrDef(type);
 
 HTMLStyleDef(color, color);
 

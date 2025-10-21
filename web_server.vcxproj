@@ -276,6 +276,9 @@
     <ClInclude Include="source\web_server\html.h" />
     <ClInclude Include="source\web_server\http_server.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="run\script.js" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

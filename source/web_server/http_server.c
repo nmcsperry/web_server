@@ -270,7 +270,7 @@ void ServerLoop(http_server * Server)
 
 		if (Request->Status == HTTPRequest_Ready && Request->RequestProtocolSwitch == WebProtocol_WebSocket)
 		{
-			Request->Status == HTTPRequest_Processed;
+			Request->Status = HTTPRequest_Processed;
 			Request->ResponseHTTPCode = 101;
 			Request->ResponseBehavior = ResponseBehavior_Respond;
 			continue;
@@ -475,10 +475,12 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 				return;
 			}
 
+			str8 HeaderValue = Str8Trim(HeaderLine.String);
+
 			if (Str8Match(HeaderKey.String, Str8Lit("Content-Length"), MatchFlag_IgnoreCase))
 			{
 				void * Extra = 0;
-				Request->RequestContentLength = IntFromStr8(HeaderLine.String, Extra);
+				Request->RequestContentLength = IntFromStr8(HeaderValue, Extra);
 				Request->RequestContentLengthComplete = true;
 				if (Extra)
 				{
@@ -494,7 +496,7 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 
 			if (Str8Match(HeaderKey.String, Str8Lit("Upgrade"), MatchFlag_IgnoreCase))
 			{
-				if (Str8Match(HeaderLine.String, Str8Lit("websocket"), MatchFlag_IgnoreCase))
+				if (Str8Match(HeaderValue, Str8Lit("websocket"), MatchFlag_IgnoreCase))
 				{
 					Request->RequestProtocolSwitch = WebProtocol_WebSocket;
 				}
@@ -505,9 +507,9 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 				}
 			}
 
-			if (Str8Match(HeaderKey.String, Str8Lit("Sec-WebSocket-Key"), MatchFlag_IgnoreCase))
+			if (Str8Match(HeaderKey.String, Str8Lit("Sec-Websocket-Key"), MatchFlag_IgnoreCase))
 			{
-				Request->RequestWebSocketKey = ArenaPushStr8(Arena, Str8Trim(HeaderLine.String));
+				Request->RequestWebSocketKey = ArenaPushStr8(Arena, HeaderValue);
 			}
 		}
 	}
@@ -515,6 +517,11 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 	if (Request->RequestHTTPMethod == 1 && !Request->RequestContentLengthComplete)
 	{
 		HttpRequestRespondWithError(Request, 411);
+		return;
+	}
+	if (Request->RequestProtocolSwitch && Request->RequestWebSocketKey.Count == 0)
+	{
+		HttpRequestRespondWithError(Request, 400);
 		return;
 	}
 	if (Request->RequestContentLength == 0)

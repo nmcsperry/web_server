@@ -705,7 +705,7 @@ str8 Str8SubstrFromFinds(str8 String, str8 Start, str8 End, bool32 RequireEnd)
 
 str8 Str8Trim(str8 String)
 {
-	String = Str8ParseEatWhitespace(&String);
+	Str8ParseEatWhitespace(&String);
 
 	u32 Index = 0;
 	while (Index < String.Count && Char8Match(String.Data[String.Count - 1 - Index], Char8ClassWhitespace, 0))

@@ -30,6 +30,31 @@ str8 NotFoundPage(http_server * Server, memory_arena * Arena)
     return Str8FromHTML(Arena, Writer.DocumentRoot);
 }
 
+str8 WebSocketTestPage(memory_arena * Arena)
+{
+    html_writer Writer = HTMLWriterCreate(Arena);
+
+    HTMLTag(&Writer, HTMLTag_head)
+    {
+        HTMLTag(&Writer, HTMLTag_title)
+        {
+            HTMLText(&Writer, Str8Lit("WebSocket Test"));
+        }
+    }
+
+    HTMLTag(&Writer, HTMLTag_body)
+    {
+        HTMLTag(&Writer, HTMLTag_script)
+        {
+            HTMLAttr(&Writer, HTMLAttr_type, Str8Lit("text/javascript"));
+            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("script.js"));
+            HTMLTextCStr(&Writer, "var test;");
+        }
+    }
+
+    return Str8FromHTML(Arena, Writer.DocumentRoot);
+}
+
 str8 MainPage(http_server * Server, memory_arena * Arena)
 {
     html_writer Writer = HTMLWriterCreate(Arena);
@@ -93,6 +118,7 @@ void InitAssetPages(memory_arena * Arena)
 
     InitAssetPage(Arena, AssetHashTable, "my_image.png", Str8Lit("/my_image.png"), &MimeType_PNG);
     InitAssetPage(Arena, AssetHashTable, "favicon.ico", Str8Lit("/favicon.ico"), &MimeType_ICO);
+    InitAssetPage(Arena, AssetHashTable, "script.js", Str8Lit("/script.js"), &MimeType_JS);
 }
 
 void EntryHook()
@@ -124,7 +150,7 @@ void EntryHook()
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseHTTPCode = 200;
-                Request->ResponseBody = MainPage(&Server, Server.ResponseArena);
+                Request->ResponseBody = WebSocketTestPage(Server.ResponseArena);
                 Request->ResponseMimeType = &MimeType_HTML;
             }
             else

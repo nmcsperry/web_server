@@ -123,6 +123,7 @@ mime_type MimeType_HTML = Str8LitInit("text/html; charset=utf-8");
 mime_type MimeType_PNG = Str8LitInit("image/png");
 mime_type MimeType_ICO = Str8LitInit("image/x-icon");
 mime_type MimeType_Text = Str8LitInit("text/plain");
+mime_type MimeType_JS = Str8LitInit("text/javascript");
 mime_type MimeType_Unknown = Str8LitInit("application/octet-stream");
 
 http_server ServerInit(socket_handle Socket);
