@@ -63,17 +63,25 @@ void RespondToRequestWithHTTP(http_server * Server, http_request_slot * RequestS
 		Request->ResponseBehavior |= ResponseBehavior_Close;
 	}
 
-	if (!(Request->ResponseBehavior & ResponseBehavior_Close))
-	{
-		Str8WriteFmt(Buffer, "Connection: Keep-Alive\r\n");
-	}
-
 	if (Request->RequestProtocolSwitch == WebProtocol_WebSocket)
 	{
 		str8 WebSocketMagicValue = Str8Lit("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 		sha1 SHA1 = CalculateSHA1(Str8Concat(RequestSlot->Arena, Request->RequestWebSocketKey, WebSocketMagicValue));
 
-		Str8WriteFmt(Buffer, "Sec-WebSocket-Accept: %{base64}\r\n", Blob(SHA1));
+		// todo: something is backwards possibly that this needed?
+		SHA1.E[0] = SwapByteOrderU32(SHA1.E[0]);
+		SHA1.E[1] = SwapByteOrderU32(SHA1.E[1]);
+		SHA1.E[2] = SwapByteOrderU32(SHA1.E[2]);
+		SHA1.E[3] = SwapByteOrderU32(SHA1.E[3]);
+		SHA1.E[4] = SwapByteOrderU32(SHA1.E[4]);
+
+		Str8WriteFmt(Buffer, "Upgrade: websocket\r\n");
+		Str8WriteFmt(Buffer, "Connection: Upgrade\r\n");
+		Str8WriteFmt(Buffer, "Sec-WebSocket-Accept: %{base64}\r\n", Blob(SHA1), '=');
+	}
+	else if (!(Request->ResponseBehavior & ResponseBehavior_Close))
+	{
+		Str8WriteFmt(Buffer, "Connection: Keep-Alive\r\n");
 	}
 
 	if (Request->ResponseBody.Data)
@@ -94,7 +102,7 @@ void RespondToRequestWithHTTP(http_server * Server, http_request_slot * RequestS
 	SocketOutput(Connection->Socket, ResponseString);
 
 	StdOutput(ResponseString);
-	StdOutput(Str8Lit("END"));
+	StdOutput(Str8Lit("END\r\n"));
 
 	ScratchBufferRelease(Buffer);
 }
@@ -510,6 +518,7 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 			if (Str8Match(HeaderKey.String, Str8Lit("Sec-Websocket-Key"), MatchFlag_IgnoreCase))
 			{
 				Request->RequestWebSocketKey = ArenaPushStr8(Arena, HeaderValue);
+				// Request->RequestWebSocketKey = ArenaPushStr8(Arena, Str8Lit("dGhlIHNhbXBsZSBub25jZQ=="));
 			}
 		}
 	}
