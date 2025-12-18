@@ -56,9 +56,9 @@ void RespondToRequestWithHTTP(http_server * Server, http_request_slot * RequestS
 
 	memory_buffer * Buffer = ScratchBufferStart();
 
-	Str8WriteFmt(Buffer, "HTTP/1.1 %{u16} %{str8}\r\n", Request->ResponseHTTPCode, HTTPReasonName(Request->ResponseHTTPCode));
+	Str8WriteFmt(Buffer, "HTTP/1.1 %{u16} %{str8}\r\n", Request->ResponseCode, HTTPReasonName(Request->ResponseCode));
 
-	if (Request->ResponseBehavior && Request->ResponseHTTPCode >= 500)
+	if (Request->ResponseBehavior && Request->ResponseCode >= 500)
 	{
 		Request->ResponseBehavior |= ResponseBehavior_Close;
 	}
@@ -243,7 +243,7 @@ void ServerLoop(http_server * Server)
 					break;
 				}
 
-				if (Request->RequestBodyComplete)
+				if (Request->RequestComplete)
 				{
 					Request->Status = HTTPRequest_Ready;
 					Connection->Value.IsParsingRequest = false;
@@ -266,6 +266,30 @@ void ServerLoop(http_server * Server)
 					Str8WriteStr8(&Connection->Unparsed, RequestData);
 				}
 			}
+			else if (Connection->Value.ProtocolType == WebProtocol_WebSocket)
+			{
+				ParseWebsocketRequest(Server, &RequestData, RequestSlot);
+
+				if (Request->Status == HTTPRequest_Processed)
+				{
+					Connection->Value.IsParsingRequest = false;
+					Connection->Value.ParsingRequestIndex = 0;
+					break;
+				}
+
+				if (Request->RequestComplete)
+				{
+					Request->Status = HTTPRequest_Ready;
+					Connection->Value.IsParsingRequest = false;
+					Connection->Value.ParsingRequestIndex = 0;
+				}
+
+				BufferReset(&Connection->Unparsed);
+				if (RequestData.Count)
+				{
+					Str8WriteStr8(&Connection->Unparsed, RequestData);
+				}
+			}
 		}
 	}
 
@@ -279,7 +303,7 @@ void ServerLoop(http_server * Server)
 		if (Request->Status == HTTPRequest_Ready && Request->RequestProtocolSwitch == WebProtocol_WebSocket)
 		{
 			Request->Status = HTTPRequest_Processed;
-			Request->ResponseHTTPCode = 101;
+			Request->ResponseCode = 101;
 			Request->ResponseBehavior = ResponseBehavior_Respond;
 			continue;
 		}
@@ -402,9 +426,133 @@ bool8 CloseRequest(http_request_slot * RequestSlot)
 
 void HttpRequestRespondWithError(http_request * Request, u32 Code)
 {
-	Request->ResponseHTTPCode = Code;
+	Request->ResponseCode = Code;
 	Request->ResponseBehavior = ResponseBehavior_RespondClose;
 	Request->Status = HTTPRequest_Processed;
+}
+
+void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_request_slot * RequestSlot)
+{
+	memory_arena * Arena = RequestSlot->Arena;
+	http_request * Request = &RequestSlot->Value;
+
+	if (Request->BodyBuffer.Data == 0)
+	{
+		Request->BodyBuffer = BufferCreateOnArena(HTTP_REQUEST_PARSE_SIZE, Arena);
+	}
+
+	while (!Request->RequestComplete)
+	{
+		Request->FrameHTTPMethodComplete = true;
+
+		if (!Request->FrameHeaderComplete)
+		{
+			if (RequestData->Count < 2)
+			{
+				return;
+			}
+
+			u64 Cursor = 0;
+
+			bool32 FinalFrame = RequestData->Data[Cursor] >> 7;
+			u32 Opcode = RequestData->Data[Cursor] & 0xf;
+
+			Cursor++;
+
+			bool32 Masked = RequestData->Data[Cursor] >> 7;
+			u64 Length = RequestData->Data[Cursor] & ~0x80;
+
+			Cursor++;
+
+			if (Length == 126)
+			{
+				if (RequestData->Count < Cursor + 2)
+				{
+					return;
+				}
+
+				Length = (RequestData->Data[Cursor] << 8) | RequestData->Data[Cursor + 1];
+
+				Cursor += 2;
+			}
+			else if (Length == 127)
+			{
+				if (RequestData->Count < Cursor + 4)
+				{
+					return;
+				}
+
+				Length =
+					(RequestData->Data[Cursor] << 24) | (RequestData->Data[Cursor + 1] << 16) |
+					(RequestData->Data[Cursor + 2] << 8) | RequestData->Data[Cursor + 3];
+
+				Cursor += 4;
+			}
+
+			u32 Mask = 0;
+			if (Masked)
+			{
+				if (RequestData->Count < Cursor + 4)
+				{
+					return;
+				}
+				Mask = *((u32 *)&RequestData->Data[Cursor]);
+
+				Cursor += 4;
+			}
+
+			Request->FrameHeaderComplete = true;
+
+			Str8ParseEat(RequestData, Cursor);
+
+			Request->Mask = Mask;
+			Request->HasMoreFrames = !FinalFrame;
+			Request->RequestContentLength = Length;
+			Request->RequestHasContentLength = Length != 0;
+		}
+
+		if (!Request->FrameBodyComplete)
+		{
+			if (RequestData->Count >= Request->RequestContentLength)
+			{
+				char8 * StartIndex = BufferAt(&Request->BodyBuffer);
+				Str8WriteStr8(&Request->BodyBuffer, Str8ParseEat(RequestData, Request->RequestContentLength));
+				char8 * EndIndex = BufferAt(&Request->BodyBuffer);
+
+				for (char8 * Char = StartIndex; Char <= EndIndex; Char++)
+				{
+					u8 MaskPosition = ((Char - StartIndex) % 4) * 8;
+					*Char ^= (Request->Mask & (0xff << MaskPosition)) >> MaskPosition;
+				}
+
+				Request->FrameBodyComplete = true;
+			}
+			else
+			{
+				return;
+			}
+		}
+
+		Request->FrameCount++;
+
+		if (Request->HasMoreFrames)
+		{
+			Request->RequestContentLength = 0;
+			Request->RequestHasContentLength = false;
+			Request->Mask = 0;
+			Request->HasMoreFrames = 0;
+			Request->FrameHTTPMethodComplete = false;
+			Request->FrameHeaderComplete = false;
+			Request->FrameBodyComplete = false;
+			continue;
+		}
+		else
+		{
+			Request->RequestBody = Str8FromBuffer(&Request->BodyBuffer);
+		}
+
+		Request->RequestComplete = true;
+	}
 }
 
 void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slot * RequestSlot)
@@ -412,7 +560,12 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 	memory_arena * Arena = RequestSlot->Arena;
 	http_request * Request = &RequestSlot->Value;
 
-	if (!Request->RequestMethodComplete)
+	if (Request->BodyBuffer.Data == 0)
+	{
+		Request->BodyBuffer = BufferCreateOnArena(HTTP_REQUEST_PARSE_SIZE, Arena);
+	}
+
+	if (!Request->FrameHTTPMethodComplete)
 	{
 		// get next header line
 		str8_bool32 HeaderLine = Str8ParseEatUntilStr8Match(RequestData, Str8Lit("\r\n"));
@@ -448,10 +601,10 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 			return;
 		}
 
-		Request->RequestMethodComplete = true;
+		Request->FrameHTTPMethodComplete = true;
 	}
 
-	if (!Request->RequestHeadersComplete)
+	if (!Request->FrameHeaderComplete)
 	{
 		while (true)
 		{
@@ -467,7 +620,7 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 			}
 			if (HeaderLine.String.Count == 0)
 			{
-				Request->RequestHeadersComplete = true;
+				Request->FrameHeaderComplete = true;
 				break;
 			}
 
@@ -489,7 +642,7 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 			{
 				void * Extra = 0;
 				Request->RequestContentLength = IntFromStr8(HeaderValue, Extra);
-				Request->RequestContentLengthComplete = true;
+				Request->RequestHasContentLength = true;
 				if (Extra)
 				{
 					HttpRequestRespondWithError(Request, 400);
@@ -518,12 +671,11 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 			if (Str8Match(HeaderKey.String, Str8Lit("Sec-Websocket-Key"), MatchFlag_IgnoreCase))
 			{
 				Request->RequestWebSocketKey = ArenaPushStr8(Arena, HeaderValue);
-				// Request->RequestWebSocketKey = ArenaPushStr8(Arena, Str8Lit("dGhlIHNhbXBsZSBub25jZQ=="));
 			}
 		}
 	}
 
-	if (Request->RequestHTTPMethod == 1 && !Request->RequestContentLengthComplete)
+	if (Request->RequestHTTPMethod == 1 && !Request->RequestHasContentLength)
 	{
 		HttpRequestRespondWithError(Request, 411);
 		return;
@@ -535,23 +687,25 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 	}
 	if (Request->RequestContentLength == 0)
 	{
-		Request->RequestBodyComplete = true;
+		Request->FrameBodyComplete = true;
 	}
 
-	if (!Request->RequestBodyComplete)
+	if (!Request->FrameBodyComplete)
 	{
-		if (RequestData->Count < Request->RequestContentLength)
+		if (RequestData->Count >= Request->RequestContentLength)
 		{
-			return;
+			Str8WriteStr8(&Request->BodyBuffer, Str8ParseEat(RequestData, Request->RequestContentLength));
+			Request->RequestBody = Str8FromBuffer(&Request->BodyBuffer);
+			Request->FrameBodyComplete = true;
 		}
 		else
 		{
-			str8 Body = Str8ParseEat(RequestData, Request->RequestContentLength);
-			Request->RequestBody = ArenaPushStr8(Arena, Body);
-			Request->RequestBodyComplete = true;
 			return;
 		}
 	}
+
+	Request->FrameCount++;
+	Request->RequestComplete = true;
 }
 
 http_request * ServerNextRequest(http_server * Server)

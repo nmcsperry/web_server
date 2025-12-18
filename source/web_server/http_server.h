@@ -68,14 +68,20 @@ typedef struct http_request
 {
 	u32 Status;
 
-	bool8 RequestMethodComplete;
-	bool8 RequestHeadersComplete;
-	bool8 RequestContentLengthComplete;
-	bool8 RequestBodyComplete;
+	bool8 FrameHTTPMethodComplete;
+	bool8 FrameHeaderComplete;
+	bool8 FrameBodyComplete;
+	bool8 RequestComplete;
+
+	bool8 HasMoreFrames;
+	u32 Mask;
 
 	u32 RequestHTTPMethod;
 	str8 RequestPath;
 	str8 RequestBody;
+	u32 FrameCount;
+
+	u32 RequestHasContentLength;
 	u32 RequestContentLength;
 
 	u32 RequestProtocolSwitch;
@@ -84,9 +90,11 @@ typedef struct http_request
 	u32 ConnectionIndex;
 
 	u16 ResponseBehavior;
-	u16 ResponseHTTPCode;
+	u16 ResponseCode;
 	str8 ResponseBody;
 	mime_type * ResponseMimeType;
+
+	memory_buffer BodyBuffer;
 
 	str8 ResponseWebSocketAccept;
 } http_request;
@@ -126,6 +134,16 @@ mime_type MimeType_Text = Str8LitInit("text/plain");
 mime_type MimeType_JS = Str8LitInit("text/javascript");
 mime_type MimeType_Unknown = Str8LitInit("application/octet-stream");
 
+enum websocket_opcode
+{
+	WebSocket_Continuation = 0,
+	WebSocket_Text = 1,
+	WebSocket_Binary = 2,
+	WebSocket_Close = 8,
+	WebSocket_Ping = 9,
+	WebSocket_Pong = 10
+};
+
 http_server ServerInit(socket_handle Socket);
 void ServerLoop(http_server * Server);
 
@@ -135,6 +153,7 @@ bool8 CloseConnection(http_server * Server, http_connection_slot * Connection, u
 bool8 CloseRequest(http_request_slot * RequestSlot);
 
 void ParseHttpRequest(http_server * Server, http_connection_slot * Connection, str8 * HttpRequest);
+void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_request_slot * RequestSlot);
 
 http_request_slot * AddRequest(http_server * Server, http_connection_slot * Connection);
 

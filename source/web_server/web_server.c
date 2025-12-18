@@ -138,25 +138,39 @@ void EntryHook()
 		http_request * Request = 0;
 		while (Request = ServerNextRequest(&Server))
 		{
+            http_connection_slot * ConnectionSlot = &Server.Connections[Request->ConnectionIndex];
+
+            if (ConnectionSlot->Value.ProtocolType == WebProtocol_WebSocket)
+            {
+                StdOutputFmt("\n\nSilence HTTP, a WebSocket is speaking.\n%{str8}\n\n", Request->RequestBody);
+            }
+
             asset * Asset = HashTableGet(AssetHashTable, Request->RequestPath);
             if (Asset)
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
-                Request->ResponseHTTPCode = 200;
+                Request->ResponseCode = 200;
                 Request->ResponseMimeType = Asset->MimeType;
                 Request->ResponseBody = Asset->Data;
             }
             else if (Str8Match(Request->RequestPath, Str8Lit("/"), 0))
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
-                Request->ResponseHTTPCode = 200;
+                Request->ResponseCode = 200;
                 Request->ResponseBody = WebSocketTestPage(Server.ResponseArena);
+                Request->ResponseMimeType = &MimeType_HTML;
+            }
+            else if (Str8Match(Request->RequestPath, Str8Lit("/post_test"), 0))
+            {
+                Request->ResponseBehavior = ResponseBehavior_Respond;
+                Request->ResponseCode = 200;
+                Request->ResponseBody = Str8Fmt(Server.ResponseArena, "%{str8} TEST", Request->RequestBody);
                 Request->ResponseMimeType = &MimeType_HTML;
             }
             else
             {
                 Request->ResponseBehavior = ResponseBehavior_Respond;
-                Request->ResponseHTTPCode = 404;
+                Request->ResponseCode = 404;
                 Request->ResponseBody = NotFoundPage(&Server, Server.ResponseArena);
                 Request->ResponseMimeType = &MimeType_HTML;
             }
