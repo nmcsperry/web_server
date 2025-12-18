@@ -44,9 +44,51 @@ void RespondToRequestWithWebSocketFrame(http_server * Server, http_request_slot 
 	http_request * Request = &RequestSlot->Value;
 	http_connection * Connection = &ConnectionSlot->Value;
 
-	// todo: implement this
+	memory_buffer * Buffer = ScratchBufferStart();
 
-	return;
+	u8 FinalFrame = 1;
+	u8 Opcode = 1;
+	u8 FirstByte = (FinalFrame << 7) | Opcode;
+
+	u8 Masked = 0;
+	u8 Length = 0;
+	if (Request->ResponseBody.Data)
+	{
+		if (Request->ResponseBody.Count <= 125)
+		{
+			Length = Request->ResponseBody.Count;
+		}
+		else if (Request->ResponseBody.Count <= U16Max)
+		{
+			Length = 126;
+		}
+		else
+		{
+			Length = 127;
+		}
+	}
+	u8 SecondByte = (Masked << 7) | Length;
+
+	Str8WriteChar8(Buffer, FirstByte);
+	Str8WriteChar8(Buffer, SecondByte);
+
+	if (Length == 126)
+	{
+		u16 Length = Request->ResponseBody.Count;
+		Length = SwapByteOrderU16(Length);
+		BufferPush(Buffer, &Length, 2);
+	}
+	else if (Length == 126)
+	{
+		u64 Length = Request->ResponseBody.Count;
+		Length = SwapByteOrderU64(Length);
+		BufferPush(Buffer, &Length, 4);
+	}
+
+	Str8WriteStr8(Buffer, Request->ResponseBody);
+
+	str8 ResponseString = Str8FromBuffer(Buffer);
+	SocketOutput(Connection->Socket, ResponseString);
 }
 
 void RespondToRequestWithHTTP(http_server * Server, http_request_slot * RequestSlot, http_connection_slot * ConnectionSlot)
@@ -100,9 +142,6 @@ void RespondToRequestWithHTTP(http_server * Server, http_request_slot * RequestS
 
 	str8 ResponseString = Str8FromBuffer(Buffer);
 	SocketOutput(Connection->Socket, ResponseString);
-
-	StdOutput(ResponseString);
-	StdOutput(Str8Lit("END\r\n"));
 
 	ScratchBufferRelease(Buffer);
 }
@@ -269,6 +308,7 @@ void ServerLoop(http_server * Server)
 			else if (Connection->Value.ProtocolType == WebProtocol_WebSocket)
 			{
 				ParseWebsocketRequest(Server, &RequestData, RequestSlot);
+				Request->RequestPath = Connection->Value.WebSocketPath;
 
 				if (Request->Status == HTTPRequest_Processed)
 				{

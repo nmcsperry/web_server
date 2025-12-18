@@ -142,7 +142,12 @@ void EntryHook()
 
             if (ConnectionSlot->Value.ProtocolType == WebProtocol_WebSocket)
             {
+                Request->ResponseBehavior = ResponseBehavior_Respond;
+                Request->ResponseCode = 1;
+                Request->ResponseBody = Str8Fmt(Server.ResponseArena, "%{str8} TEST", Request->RequestBody);
+
                 StdOutputFmt("\n\nSilence HTTP, a WebSocket is speaking.\n%{str8}\n\n", Request->RequestBody);
+                continue;
             }
 
             asset * Asset = HashTableGet(AssetHashTable, Request->RequestPath);
