@@ -10,7 +10,7 @@
 #include "http_server.c"
 #include "html.c"
 
-str8 NotFoundPage(http_server * Server, memory_arena * Arena)
+str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 {
     html_writer Writer = HTMLWriterCreate(Arena);
 
@@ -55,7 +55,7 @@ str8 WebSocketTestPage(memory_arena * Arena)
     return Str8FromHTML(Arena, Writer.DocumentRoot);
 }
 
-str8 MainPage(http_server * Server, memory_arena * Arena)
+str8 MainPage(web_server * Server, memory_arena * Arena)
 {
     html_writer Writer = HTMLWriterCreate(Arena);
 
@@ -71,7 +71,7 @@ str8 MainPage(http_server * Server, memory_arena * Arena)
     {
         for (u32 I = 0; I < ArrayCount(Server->Connections); I++)
         {
-            http_connection_slot * Connection = &Server->Connections[I];
+            web_connection_slot * Connection = &Server->Connections[I];
 
             if (Connection->Value.Valid)
             {
@@ -129,30 +129,30 @@ void EntryHook()
     InitAssetPages(AssetArena);
 
 	socket_handle Socket = SocketCreateServer(80, 50);
-	http_server Server = ServerInit(Socket);
+	web_server Server = ServerInit(Socket);
 
 	while (true)
 	{
 		ServerLoop(&Server);
 
-		http_request * Request = 0;
+		web_request * Request = 0;
 		while (Request = ServerNextRequest(&Server))
 		{
-            http_connection_slot * ConnectionSlot = &Server.Connections[Request->ConnectionIndex];
+            web_connection_slot * ConnectionSlot = &Server.Connections[Request->ConnectionIndex];
 
             if (ConnectionSlot->Value.ProtocolType == WebProtocol_WebSocket)
             {
+                StdOutputFmt("Got a websocket request\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 1;
                 Request->ResponseBody = Str8Fmt(Server.ResponseArena, "%{str8} TEST", Request->RequestBody);
-
-                StdOutputFmt("\n\nSilence HTTP, a WebSocket is speaking.\n%{str8}\n\n", Request->RequestBody);
                 continue;
             }
 
             asset * Asset = HashTableGet(AssetHashTable, Request->RequestPath);
             if (Asset)
             {
+                StdOutputFmt("Got an asset request\n\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 200;
                 Request->ResponseMimeType = Asset->MimeType;
@@ -160,6 +160,7 @@ void EntryHook()
             }
             else if (Str8Match(Request->RequestPath, Str8Lit("/"), 0))
             {
+                StdOutputFmt("Got root request\n\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 200;
                 Request->ResponseBody = WebSocketTestPage(Server.ResponseArena);
@@ -167,6 +168,7 @@ void EntryHook()
             }
             else if (Str8Match(Request->RequestPath, Str8Lit("/post_test"), 0))
             {
+                StdOutputFmt("Got a post request\n\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 200;
                 Request->ResponseBody = Str8Fmt(Server.ResponseArena, "%{str8} TEST", Request->RequestBody);
@@ -174,6 +176,7 @@ void EntryHook()
             }
             else
             {
+                StdOutputFmt("Unknown request, responding with 404\n\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 404;
                 Request->ResponseBody = NotFoundPage(&Server, Server.ResponseArena);

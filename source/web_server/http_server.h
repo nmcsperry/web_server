@@ -3,21 +3,27 @@
 
 #include "../reuse/network/network_include.h"
 
-#define HTTP_CONNECTION_COUNT 32
-#define HTTP_REQUEST_COUNT 64
+#define WEB_CONNECTION_COUNT 32
+#define WEB_REQUEST_COUNT 64
+
 #define HTTP_REQUEST_PARSE_SIZE Kilobytes(1)
 #define HTTP_REQUEST_TOTAL_SIZE Megabytes(2)
 #define HTTP_CONNECTION_TIMEOUT 200
-#define HTTP_CONNECTION_TIMEOUT_MIDREQUEST 100
+#define HTTP_CONNECTION_TIMEOUT_MIDREQUEST 200
 
-typedef struct http_connection
+#define WEBSOCKET_BODY_TOTAL_SIZE Kilobytes(1)
+#define WEBSOCKET_CONNECTION_PING 10
+#define WEBSOCKET_CONNECTION_TIMEOUT 20
+
+typedef struct web_connection
 {
 	bool32 Valid;
 	u32 ProtocolType;
 
 	socket_handle Socket;
 	u64 FirstCommunication; // Unix time in seconds
-	u64 LastCommunication; // Unix time in seconds
+	u64 LastCommunication;  // Unix time in seconds
+	u64 LastSent;           // Unix time in seconds 
 	u32 ResponsesSent;
 	u32 RequestsReceived;
 
@@ -29,18 +35,18 @@ typedef struct http_connection
 	bool32 IsParsingRequest;
 
 	ip_addr Address;
-} http_connection;
+} web_connection;
 
-typedef struct http_connection_slot {
+typedef struct web_connection_slot {
 	u32 Index;
 
 	memory_arena * Arena;
 	memory_buffer Unparsed;
 
-	http_connection Value;
-} http_connection_slot;
+	web_connection Value;
+} web_connection_slot;
 
-enum HTTPResponseBehavior
+enum WebResponseBehavior
 {
 	ResponseBehavior_Ignore = 0,
 	ResponseBehavior_Respond = 1,
@@ -56,15 +62,15 @@ enum web_protocol_type
 	WebProtocol_WebSocket
 };
 
-enum http_request_status
+enum web_request_status
 {
-	HTTPRequest_Invalid,
-	HTTPRequest_Parsing,
-	HTTPRequest_Ready,
-	HTTPRequest_Processed
+	WebRequest_Invalid,
+	WebRequest_Parsing,
+	WebRequest_Ready,
+	WebRequest_Processed
 };
 
-typedef struct http_request
+typedef struct web_request
 {
 	u32 Status;
 
@@ -97,20 +103,20 @@ typedef struct http_request
 	memory_buffer BodyBuffer;
 
 	str8 ResponseWebSocketAccept;
-} http_request;
+} web_request;
 
-typedef struct http_request_slot
+typedef struct web_request_slot
 {
 	u32 Index;
 
 	memory_arena * Arena;
 
-	http_request Value;
-} http_request_slot;
+	web_request Value;
+} web_request_slot;
 
-typedef struct http_server {
-	http_connection_slot Connections[HTTP_CONNECTION_COUNT];
-	http_request_slot Requests[HTTP_REQUEST_COUNT];
+typedef struct web_server {
+	web_connection_slot Connections[WEB_CONNECTION_COUNT];
+	web_request_slot Requests[WEB_REQUEST_COUNT];
 
 	memory_buffer ParsingWorkspace;
 
@@ -119,7 +125,7 @@ typedef struct http_server {
 	memory_arena * Arena;
 	memory_arena * ResponseArena;
 	socket_polling * Polling;
-} http_server;
+} web_server;
 
 enum http_method
 {
@@ -144,19 +150,20 @@ enum websocket_opcode
 	WebSocket_Pong = 10
 };
 
-http_server ServerInit(socket_handle Socket);
-void ServerLoop(http_server * Server);
+web_server ServerInit(socket_handle Socket);
+void ServerLoop(web_server * Server);
 
-http_connection_slot * AddConnection(http_server * Server, socket_handle Socket, ip_addr Address);
-bool8 CloseConnection(http_server * Server, http_connection_slot * Connection, u16 Reason);
+web_connection_slot * AddConnection(web_server * Server, socket_handle Socket, ip_addr Address);
+bool8 CloseConnection(web_server * Server, web_connection_slot * Connection);
 
-bool8 CloseRequest(http_request_slot * RequestSlot);
+bool8 CloseRequest(web_request_slot * RequestSlot);
 
-void ParseHttpRequest(http_server * Server, http_connection_slot * Connection, str8 * HttpRequest);
-void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_request_slot * RequestSlot);
+void ParseHttpRequest(web_server * Server, web_connection_slot * Connection, str8 * HttpRequest);
+void ParseWebsocketRequest(web_server * Server, str8 * RequestData, web_request_slot * RequestSlot);
 
-http_request_slot * AddRequest(http_server * Server, http_connection_slot * Connection);
+web_request_slot * AddRequest(web_server * Server, web_connection_slot * Connection);
 
 str8 HTTPReasonName(u16 Reason);
+str8 WebsocketReasonName(u16 Reason);
 
 #endif

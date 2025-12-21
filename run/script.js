@@ -1,7 +1,16 @@
 const socket = new WebSocket("ws://localhost");
 
 socket.onopen = function(event) {
-    socket.send("IILWRSAIH");
+    socket.send("This is longer than 125 bytes. This is longer than 125 bytes. This is longer than 125 bytes." + 
+        "This is longer than 125 bytes. This is longer than 125 bytes.");
+}
+socket.onmessage = function(event)
+{
+    document.write(event.data);
+}
+socket.onclose = function(event)
+{
+    document.write(" CLOSED");
 }
 
 fetch("/post_test", {

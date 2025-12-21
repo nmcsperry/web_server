@@ -3,51 +3,66 @@
 #include "../reuse/network/network_include.h"
 #include "http_server.h"
 
-http_server ServerInit(socket_handle Socket)
+web_server ServerInit(socket_handle Socket)
 {
 	memory_arena * ServerArena = ArenaCreate(0);
 	memory_arena * ResponseArena = ArenaCreate(Megabytes(128));
 
-	http_server Result = (http_server)
+	web_server Result = (web_server)
 	{
 		.ParsingWorkspace = BufferCreate(HTTP_REQUEST_TOTAL_SIZE),
 		.ServerSocket = Socket,
 		.Arena = ServerArena,
 		.ResponseArena = ResponseArena,
-		.Polling = SocketPollingCreate(ServerArena, HTTP_CONNECTION_COUNT)
+		.Polling = SocketPollingCreate(ServerArena, WEB_CONNECTION_COUNT)
 	};
 
-	for (i32 I = 0; I < HTTP_CONNECTION_COUNT; I++)
+	for (i32 I = 0; I < WEB_CONNECTION_COUNT; I++)
 	{
 		memory_arena * Arena = ArenaCreateAdv(Kilobytes(4), 0, 0);
 		Result.Connections[I].Index = I;
 		Result.Connections[I].Arena = Arena;
 		Result.Connections[I].Unparsed = BufferCreate(Kilobytes(1));
 
-		OSZeroMemory(&Result.Connections[I].Value, sizeof(http_connection));
+		OSZeroMemory(&Result.Connections[I].Value, sizeof(web_connection));
 	}
 
-	for (i32 I = 0; I < HTTP_REQUEST_COUNT; I++)
+	for (i32 I = 0; I < WEB_REQUEST_COUNT; I++)
 	{
 		memory_arena * Arena = ArenaCreateAdv(Kilobytes(4), 0, 0);
 		Result.Requests[I].Index = I;
 		Result.Requests[I].Arena = Arena;
 
-		OSZeroMemory(&Result.Requests[I].Value, sizeof(http_request));
+		OSZeroMemory(&Result.Requests[I].Value, sizeof(web_request));
 	}
 
 	return Result;
 }
 
-void RespondToRequestWithWebSocketFrame(http_server * Server, http_request_slot * RequestSlot, http_connection_slot * ConnectionSlot)
+void RespondToRequestWithWebSocketFrame(web_server * Server, web_request_slot * RequestSlot, web_connection_slot * ConnectionSlot)
 {
-	http_request * Request = &RequestSlot->Value;
-	http_connection * Connection = &ConnectionSlot->Value;
-
-	memory_buffer * Buffer = ScratchBufferStart();
+	web_request * Request = &RequestSlot->Value;
+	web_connection * Connection = &ConnectionSlot->Value;
 
 	u8 FinalFrame = 1;
-	u8 Opcode = 1;
+	u8 Opcode = Request->ResponseCode;
+	if (Request->ResponseCode >= 1000)
+	{
+		Opcode = 8;
+
+		u16 ReasonCode = SwapByteOrderU16(Request->ResponseCode);
+		u8 FirstReasonByte = ReasonCode & 0xff;
+		u8 SecondReasonByte = (ReasonCode & 0xff00) >> 8;
+
+		if (Request->ResponseBody.Data == 0)
+		{
+			Request->ResponseBody = WebsocketReasonName(Request->ResponseCode);
+		}
+
+		Request->ResponseBody = Str8Fmt(RequestSlot->Arena, "%{char8}%{char8}%{str8}",
+			FirstReasonByte, SecondReasonByte, Request->ResponseBody);
+	}
+
 	u8 FirstByte = (FinalFrame << 7) | Opcode;
 
 	u8 Masked = 0;
@@ -69,6 +84,8 @@ void RespondToRequestWithWebSocketFrame(http_server * Server, http_request_slot 
 	}
 	u8 SecondByte = (Masked << 7) | Length;
 
+	memory_buffer * Buffer = ScratchBufferStart();
+	
 	Str8WriteChar8(Buffer, FirstByte);
 	Str8WriteChar8(Buffer, SecondByte);
 
@@ -89,12 +106,14 @@ void RespondToRequestWithWebSocketFrame(http_server * Server, http_request_slot 
 
 	str8 ResponseString = Str8FromBuffer(Buffer);
 	SocketOutput(Connection->Socket, ResponseString);
+
+	ScratchBufferRelease(Buffer);
 }
 
-void RespondToRequestWithHTTP(http_server * Server, http_request_slot * RequestSlot, http_connection_slot * ConnectionSlot)
+void RespondToRequestWithHTTP(web_server * Server, web_request_slot * RequestSlot, web_connection_slot * ConnectionSlot)
 {
-	http_request * Request = &RequestSlot->Value;
-	http_connection * Connection = &ConnectionSlot->Value;
+	web_request * Request = &RequestSlot->Value;
+	web_connection * Connection = &ConnectionSlot->Value;
 
 	memory_buffer * Buffer = ScratchBufferStart();
 
@@ -146,16 +165,23 @@ void RespondToRequestWithHTTP(http_server * Server, http_request_slot * RequestS
 	ScratchBufferRelease(Buffer);
 }
 
-void RespondToRequest(http_server * Server, http_request_slot * RequestSlot, http_connection_slot * ConnectionSlot)
+void RespondToRequest(web_server * Server, web_request_slot * RequestSlot, web_connection_slot * ConnectionSlot)
 {
-	http_request * Request = &RequestSlot->Value;
-	http_connection * Connection = &ConnectionSlot->Value;
+	web_request * Request = &RequestSlot->Value;
+	web_connection * Connection = &ConnectionSlot->Value;
 
 	if (Request->ResponseBehavior & ResponseBehavior_Respond)
 	{
-		if (Connection->ProtocolType == WebProtocol_WebSocket && Connection->ResponsesSent != 0)
+		if (Connection->ProtocolType == WebProtocol_WebSocket)
 		{
-			RespondToRequestWithWebSocketFrame(Server, RequestSlot, ConnectionSlot);
+			if (Connection->ResponsesSent == 0) // websocket handshake is basically http
+			{
+				RespondToRequestWithHTTP(Server, RequestSlot, ConnectionSlot);
+			}
+			else
+			{
+				RespondToRequestWithWebSocketFrame(Server, RequestSlot, ConnectionSlot);
+			}
 		}
 		else
 		{
@@ -163,34 +189,40 @@ void RespondToRequest(http_server * Server, http_request_slot * RequestSlot, htt
 		}
 	
 		Connection->ResponsesSent++;
+		Connection->LastSent = UnixTimeSec();
 	}
 
 	if (Request->ResponseBehavior & ResponseBehavior_Close)
 	{
-		CloseConnection(Server, ConnectionSlot, 0);
+		CloseConnection(Server, ConnectionSlot);
 	}
 }
 
-void ServerLoop(http_server * Server)
+void ServerLoop(web_server * Server)
 {
 	// send responses for requests the application code has processed
 
-	for (i32 I = 0; I < HTTP_REQUEST_COUNT; I++)
+	for (i32 I = 0; I < WEB_REQUEST_COUNT; I++)
 	{
-		http_request_slot * RequestSlot = &Server->Requests[I];
-		http_request * Request = &RequestSlot->Value;
+		web_request_slot * RequestSlot = &Server->Requests[I];
+		web_request * Request = &RequestSlot->Value;
 
-		http_connection_slot * ConnectionSlot = Request->Status ? &Server->Connections[Request->ConnectionIndex] : 0;
-		http_connection * Connection = ConnectionSlot ? &ConnectionSlot->Value : 0;
+		if (Request->Status == WebRequest_Invalid)
+		{
+			continue;
+		}
+
+		web_connection_slot * ConnectionSlot = Request->Status ? &Server->Connections[Request->ConnectionIndex] : 0;
+		web_connection * Connection = ConnectionSlot ? &ConnectionSlot->Value : 0;
 
 		bool32 ConnectionValid = Connection && Connection->Valid;
 
-		if (ConnectionValid && Request->Status == HTTPRequest_Processed)
+		if (ConnectionValid && Request->Status == WebRequest_Processed)
 		{
 			RespondToRequest(Server, RequestSlot, ConnectionSlot);
 		}
 		
-		if (!ConnectionValid || Request->Status == HTTPRequest_Processed)
+		if (!ConnectionValid || Request->Status == WebRequest_Processed)
 		{
 			CloseRequest(RequestSlot);
 		}
@@ -224,10 +256,10 @@ void ServerLoop(http_server * Server)
 
 	u64 CurrentTime = UnixTimeSec();
 
-	for (i32 ConnectionIndex = 0; ConnectionIndex < HTTP_CONNECTION_COUNT; ConnectionIndex++)
+	for (i32 ConnectionIndex = 0; ConnectionIndex < WEB_CONNECTION_COUNT; ConnectionIndex++)
 	{
-		http_connection_slot * Connection = &Server->Connections[ConnectionIndex];
-		http_connection * ConnectionInfo = &Connection->Value;
+		web_connection_slot * Connection = &Server->Connections[ConnectionIndex];
+		web_connection * ConnectionInfo = &Connection->Value;
 
 		if (!ConnectionInfo->Valid)
 		{
@@ -239,13 +271,42 @@ void ServerLoop(http_server * Server)
 
 		if (!ConnectionHasData)
 		{
-			u64 Elapsed = CurrentTime - ConnectionInfo->LastCommunication;
+			u64 CommunicationElapsed = CurrentTime - ConnectionInfo->LastCommunication;
+			u64 SentElapsed = CurrentTime - ConnectionInfo->LastSent;
 			bool32 MidRequest = !!Unparsed->Count;
-			u64 Timeout = MidRequest ? HTTP_CONNECTION_TIMEOUT_MIDREQUEST : HTTP_CONNECTION_TIMEOUT;
 
-			if (Elapsed >= Timeout)
+			if (Connection->Value.ProtocolType == WebProtocol_HTTP)
 			{
-				CloseConnection(Server, Connection, ConnectionInfo->ResponsesSent == 0 ? 0 : 408);
+				u64 Timeout = MidRequest ? HTTP_CONNECTION_TIMEOUT_MIDREQUEST : HTTP_CONNECTION_TIMEOUT;
+
+				if (CommunicationElapsed >= Timeout)
+				{
+					web_request_slot * CloseRequestSlot = AddRequest(Server, Connection);
+					web_request * CloseRequest = &CloseRequestSlot->Value;
+					CloseRequest->Status = WebRequest_Processed;
+					CloseRequest->ResponseCode = 408;
+					CloseRequest->ResponseBehavior = ConnectionInfo->ResponsesSent == 0 ? ResponseBehavior_Close : ResponseBehavior_RespondClose;
+				}
+			}
+			else if (Connection->Value.ProtocolType == WebProtocol_WebSocket)
+			{
+				if (CommunicationElapsed >= WEBSOCKET_CONNECTION_TIMEOUT)
+				{
+					web_request_slot * CloseRequestSlot = AddRequest(Server, Connection);
+					web_request * CloseRequest = &CloseRequestSlot->Value;
+					CloseRequest->Status = WebRequest_Processed;
+					CloseRequest->ResponseCode = 1001;
+					CloseRequest->ResponseBehavior = ResponseBehavior_RespondClose;
+				}
+				else if (CommunicationElapsed >= WEBSOCKET_CONNECTION_PING && SentElapsed >= WEBSOCKET_CONNECTION_PING)
+				{
+					web_request_slot * PingRequestSlot = AddRequest(Server, Connection);
+					web_request * PingRequest = &PingRequestSlot->Value;
+					PingRequest->Status = WebRequest_Processed;
+					PingRequest->ResponseBody = Str8Lit("Ping");
+					PingRequest->ResponseCode = WebSocket_Ping;
+					PingRequest->ResponseBehavior = ResponseBehavior_Respond;
+				}
 			}
 		}
 		else
@@ -258,9 +319,11 @@ void ServerLoop(http_server * Server)
 			SocketInputToBuffer(ConnectionInfo->Socket, Workspace);
 			str8 RequestData = Str8FromBuffer(Workspace);
 
+			Connection->Value.LastCommunication = UnixTimeSec();
+
 			// get request we are creating, or make a new one if needed
 
-			http_request_slot * RequestSlot;
+			web_request_slot * RequestSlot;
 			if (Connection->Value.IsParsingRequest)
 			{
 				RequestSlot = &Server->Requests[Connection->Value.ParsingRequestIndex];
@@ -269,25 +332,32 @@ void ServerLoop(http_server * Server)
 			{
 				RequestSlot = AddRequest(Server, Connection);
 			}
-			http_request * Request = &RequestSlot->Value;
+			web_request * Request = &RequestSlot->Value;
 
 			if (Connection->Value.ProtocolType == WebProtocol_HTTP)
 			{
 				ParseHttpRequest(Server, &RequestData, RequestSlot);
+			}
+			else if (Connection->Value.ProtocolType == WebProtocol_WebSocket)
+			{
+				ParseWebsocketRequest(Server, &RequestData, RequestSlot);
+			}
 
-				if (Request->Status == HTTPRequest_Processed)
+			if (Request->Status == WebRequest_Processed)
+			{
+				Connection->Value.IsParsingRequest = false;
+				Connection->Value.ParsingRequestIndex = 0;
+				break;
+			}
+
+			if (Request->RequestComplete)
+			{
+				Request->Status = WebRequest_Ready;
+				Connection->Value.IsParsingRequest = false;
+				Connection->Value.ParsingRequestIndex = 0;
+
+				if (Connection->Value.ProtocolType == WebProtocol_HTTP)
 				{
-					Connection->Value.IsParsingRequest = false;
-					Connection->Value.ParsingRequestIndex = 0;
-					break;
-				}
-
-				if (Request->RequestComplete)
-				{
-					Request->Status = HTTPRequest_Ready;
-					Connection->Value.IsParsingRequest = false;
-					Connection->Value.ParsingRequestIndex = 0;
-
 					if (Request->RequestProtocolSwitch == WebProtocol_WebSocket)
 					{
 						Connection->Value.ProtocolType = WebProtocol_WebSocket;
@@ -298,64 +368,68 @@ void ServerLoop(http_server * Server)
 						Connection->Value.ProtocolType = WebProtocol_HTTP;
 					}
 				}
-
-				BufferReset(&Connection->Unparsed);
-				if (RequestData.Count)
-				{
-					Str8WriteStr8(&Connection->Unparsed, RequestData);
-				}
 			}
-			else if (Connection->Value.ProtocolType == WebProtocol_WebSocket)
+
+			BufferReset(&Connection->Unparsed);
+			if (RequestData.Count)
 			{
-				ParseWebsocketRequest(Server, &RequestData, RequestSlot);
-				Request->RequestPath = Connection->Value.WebSocketPath;
-
-				if (Request->Status == HTTPRequest_Processed)
-				{
-					Connection->Value.IsParsingRequest = false;
-					Connection->Value.ParsingRequestIndex = 0;
-					break;
-				}
-
-				if (Request->RequestComplete)
-				{
-					Request->Status = HTTPRequest_Ready;
-					Connection->Value.IsParsingRequest = false;
-					Connection->Value.ParsingRequestIndex = 0;
-				}
-
-				BufferReset(&Connection->Unparsed);
-				if (RequestData.Count)
-				{
-					Str8WriteStr8(&Connection->Unparsed, RequestData);
-				}
+				Str8WriteStr8(&Connection->Unparsed, RequestData);
 			}
 		}
 	}
 
-	// before we return to user code, we will handle any websocket handshakes
+	// before we return to user code, we will handle any websocket handshakes and such
 
-	for (i32 I = 0; I < HTTP_REQUEST_COUNT; I++)
+	for (i32 I = 0; I < WEB_REQUEST_COUNT; I++)
 	{
-		http_request_slot * RequestSlot = &Server->Requests[I];
-		http_request * Request = &RequestSlot->Value;
+		web_request_slot * RequestSlot = &Server->Requests[I];
+		web_request * Request = RequestSlot ? &RequestSlot->Value : 0;
 
-		if (Request->Status == HTTPRequest_Ready && Request->RequestProtocolSwitch == WebProtocol_WebSocket)
+		if (Request->Status == WebRequest_Invalid)
 		{
-			Request->Status = HTTPRequest_Processed;
+			continue;
+		}
+
+		web_connection_slot * ConnectionSlot = Request ? &Server->Connections[Request->ConnectionIndex] : 0;
+		web_connection * Connection = ConnectionSlot ? &ConnectionSlot->Value : 0;
+
+		if (Request->Status == WebRequest_Ready && Request->RequestProtocolSwitch == WebProtocol_WebSocket)
+		{
+			Request->Status = WebRequest_Processed;
 			Request->ResponseCode = 101;
 			Request->ResponseBehavior = ResponseBehavior_Respond;
-			continue;
+		}
+		else if (Request->Status == WebRequest_Ready && Connection->ProtocolType == WebProtocol_WebSocket
+			&& Request->RequestHTTPMethod == WebSocket_Close)
+		{
+			Request->Status = WebRequest_Processed;
+			Request->ResponseCode = WebSocket_Close;
+			Request->ResponseBehavior = ResponseBehavior_RespondClose;
+			Request->ResponseBody = Request->RequestBody;
+		}
+		else if (Request->Status == WebRequest_Ready && Connection->ProtocolType == WebProtocol_WebSocket
+			&& Request->RequestHTTPMethod == WebSocket_Ping)
+		{
+			Request->Status = WebRequest_Processed;
+			Request->ResponseCode = WebSocket_Pong;
+			Request->ResponseBehavior = ResponseBehavior_Respond;
+			Request->ResponseBody = Request->RequestBody;
+		}
+		else if (Request->Status == WebRequest_Ready && Connection->ProtocolType == WebProtocol_WebSocket
+			&& Request->RequestHTTPMethod == WebSocket_Pong)
+		{
+			Request->Status = WebRequest_Processed;
+			Request->ResponseBehavior = ResponseBehavior_Ignore;
 		}
 	}
 }
 
-http_request_slot * AddRequest(http_server * Server, http_connection_slot * Connection)
+web_request_slot * AddRequest(web_server * Server, web_connection_slot * Connection)
 {
-	http_request_slot * Request = 0;
+	web_request_slot * Request = 0;
 
 	// find connection
-	for (i32 I = 0; I < HTTP_REQUEST_COUNT; I++)
+	for (i32 I = 0; I < WEB_REQUEST_COUNT; I++)
 	{
 		if (!Server->Requests[I].Value.Status)
 		{
@@ -370,7 +444,7 @@ http_request_slot * AddRequest(http_server * Server, http_connection_slot * Conn
 	}
 
 	Request->Value.ConnectionIndex = Connection->Index;
-	Request->Value.Status = HTTPRequest_Parsing;
+	Request->Value.Status = WebRequest_Parsing;
 
 	// todo: this can be removed, it's just for testing
 	Connection->Value.RequestsReceived++;
@@ -403,12 +477,31 @@ str8 HTTPReasonName(u16 Reason)
 	}
 }
 
-http_connection_slot * AddConnection(http_server * Server, socket_handle Socket, ip_addr Address)
+str8 WebsocketReasonName(u16 Reason)
 {
-	http_connection_slot * Connection = 0;
+	switch (Reason)
+	{
+	case 1000: return Str8Lit("Closing");
+	case 1001: return Str8Lit("Going Away");
+	case 1002: return Str8Lit("Protcol Error");
+	case 1003: return Str8Lit("Unsupported Data");
+
+	case 1007: return Str8Lit("Invalid Payload");
+	case 1008: return Str8Lit("Policy Violated");
+	case 1009: return Str8Lit("Message Too Big");
+	case 1010: return Str8Lit("Unsupported extension");
+	case 1011: return Str8Lit("Internal Server Error");
+
+	default: return Str8Lit("Unknown");
+	}
+}
+
+web_connection_slot * AddConnection(web_server * Server, socket_handle Socket, ip_addr Address)
+{
+	web_connection_slot * Connection = 0;
 
 	// find connection
-	for (i32 I = 0; I < HTTP_CONNECTION_COUNT; I++)
+	for (i32 I = 0; I < WEB_CONNECTION_COUNT; I++)
 	{
 		if (!Server->Connections[I].Value.Valid)
 		{
@@ -426,6 +519,7 @@ http_connection_slot * AddConnection(http_server * Server, socket_handle Socket,
 	Connection->Value.Socket = Socket;
 	Connection->Value.LastCommunication = UnixTimeSec();
 	Connection->Value.FirstCommunication = UnixTimeSec();
+	Connection->Value.LastSent = 0;
 	Connection->Value.Address = Address;
 	Connection->Value.ProtocolType = WebProtocol_HTTP;
 
@@ -434,51 +528,46 @@ http_connection_slot * AddConnection(http_server * Server, socket_handle Socket,
 	return Connection;
 }
 
-bool8 CloseConnection(http_server * Server, http_connection_slot * Connection, u16 Reason)
+bool8 CloseConnection(web_server * Server, web_connection_slot * Connection)
 {
-	// todo: isn't this normally not correct to send because we've already sent something like this???
-	if (Reason)
-	{
-		str8 ReasonName = HTTPReasonName(Reason);
-		SocketOutputFmt(Connection->Value.Socket, "HTTP/1.1 %{u16} %{str8}\r\nConnection: close\r\n\r\n", Reason, ReasonName);
-	}
+	StdOutputFmt("Closing something...\n\n");
 
 	SocketClose(Connection->Value.Socket);
 	SocketPollingRemove(Server->Polling, Connection->Index);
 
-	OSZeroMemory(&Connection->Value, sizeof(http_connection));
-	OSZeroMemory(&Connection->Value, sizeof(http_connection));
+	OSZeroMemory(&Connection->Value, sizeof(web_connection));
+	OSZeroMemory(&Connection->Value, sizeof(web_connection));
 
 	BufferZero(&Connection->Unparsed);
 
 	return true;
 }
 
-bool8 CloseRequest(http_request_slot * RequestSlot)
+bool8 CloseRequest(web_request_slot * RequestSlot)
 {
 	ArenaZero(RequestSlot->Arena);
 	ArenaReset(RequestSlot->Arena);
 
-	OSZeroMemory(&RequestSlot->Value, sizeof(http_request));
+	OSZeroMemory(&RequestSlot->Value, sizeof(web_request));
 
 	return true;
 }
 
-void HttpRequestRespondWithError(http_request * Request, u32 Code)
+void WebRequestRespondWithError(web_request * Request, u32 Code)
 {
 	Request->ResponseCode = Code;
 	Request->ResponseBehavior = ResponseBehavior_RespondClose;
-	Request->Status = HTTPRequest_Processed;
+	Request->Status = WebRequest_Processed;
 }
 
-void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_request_slot * RequestSlot)
+void ParseWebsocketRequest(web_server * Server, str8 * RequestData, web_request_slot * RequestSlot)
 {
 	memory_arena * Arena = RequestSlot->Arena;
-	http_request * Request = &RequestSlot->Value;
+	web_request * Request = &RequestSlot->Value;
 
 	if (Request->BodyBuffer.Data == 0)
 	{
-		Request->BodyBuffer = BufferCreateOnArena(HTTP_REQUEST_PARSE_SIZE, Arena);
+		Request->BodyBuffer = BufferCreateOnArena(WEBSOCKET_BODY_TOTAL_SIZE, Arena);
 	}
 
 	while (!Request->RequestComplete)
@@ -512,7 +601,6 @@ void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_reques
 				}
 
 				Length = (RequestData->Data[Cursor] << 8) | RequestData->Data[Cursor + 1];
-
 				Cursor += 2;
 			}
 			else if (Length == 127)
@@ -525,8 +613,12 @@ void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_reques
 				Length =
 					(RequestData->Data[Cursor] << 24) | (RequestData->Data[Cursor + 1] << 16) |
 					(RequestData->Data[Cursor + 2] << 8) | RequestData->Data[Cursor + 3];
-
 				Cursor += 4;
+			}
+
+			if (Length > WEBSOCKET_BODY_TOTAL_SIZE)
+			{
+				WebRequestRespondWithError(Request, 431);
 			}
 
 			u32 Mask = 0;
@@ -549,6 +641,10 @@ void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_reques
 			Request->HasMoreFrames = !FinalFrame;
 			Request->RequestContentLength = Length;
 			Request->RequestHasContentLength = Length != 0;
+			if (Request->FrameCount == 0)
+			{
+				Request->RequestHTTPMethod = Opcode;
+			}
 		}
 
 		if (!Request->FrameBodyComplete)
@@ -595,10 +691,10 @@ void ParseWebsocketRequest(http_server * Server, str8 * RequestData, http_reques
 	}
 }
 
-void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slot * RequestSlot)
+void ParseHttpRequest(web_server * Server, str8 * RequestData, web_request_slot * RequestSlot)
 {
 	memory_arena * Arena = RequestSlot->Arena;
-	http_request * Request = &RequestSlot->Value;
+	web_request * Request = &RequestSlot->Value;
 
 	if (Request->BodyBuffer.Data == 0)
 	{
@@ -615,14 +711,14 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 		}
 		if (HeaderLine.String.Count > HTTP_REQUEST_PARSE_SIZE)
 		{
-			HttpRequestRespondWithError(Request, 431);
+			WebRequestRespondWithError(Request, 431);
 			return;
 		}
 
 		i32 HTTPMethod = Str8ParseExpectAny(&HeaderLine.String, (str8[]) { Str8Lit("GET"), Str8Lit("POST") }, 2, MatchFlag_IgnoreCase);
 		if (HTTPMethod == -1 || !Str8ParseExpect(&HeaderLine.String, Str8Lit(" "), MatchFlag_Normal))
 		{
-			HttpRequestRespondWithError(Request, 400);
+			WebRequestRespondWithError(Request, 400);
 			return;
 		}
 		Request->RequestHTTPMethod = HTTPMethod;
@@ -630,14 +726,14 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 		str8 Path = Str8ParseEatUntilChar(&HeaderLine.String, ' ');
 		if (Path.Count == 0 || !Str8ParseExpect(&HeaderLine.String, Str8Lit(" "), MatchFlag_Normal))
 		{
-			HttpRequestRespondWithError(Request, 400);
+			WebRequestRespondWithError(Request, 400);
 			return;
 		}
 		Request->RequestPath = ArenaPushStr8(Arena, Path);
 
 		if (!Str8ParseExpect(&HeaderLine.String, Str8Lit("HTTP/1.1"), MatchFlag_Normal) && HeaderLine.String.Count == 0)
 		{
-			HttpRequestRespondWithError(Request, 400);
+			WebRequestRespondWithError(Request, 400);
 			return;
 		}
 
@@ -651,7 +747,7 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 			str8_bool32 HeaderLine = Str8ParseEatUntilStr8Match(RequestData, Str8Lit("\r\n"));
 			if (HeaderLine.String.Count > HTTP_REQUEST_PARSE_SIZE)
 			{
-				HttpRequestRespondWithError(Request, 431);
+				WebRequestRespondWithError(Request, 431);
 				return;
 			}
 			if (HeaderLine.Bool == false)
@@ -667,12 +763,12 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 			str8_bool32 HeaderKey = Str8ParseEatUntilStr8Match(&HeaderLine.String, Str8Lit(":"));
 			if (HeaderKey.Bool == false)
 			{
-				HttpRequestRespondWithError(Request, 400);
+				WebRequestRespondWithError(Request, 400);
 				return;
 			}
 			if (HeaderKey.String.Count > HTTP_REQUEST_PARSE_SIZE)
 			{
-				HttpRequestRespondWithError(Request, 431);
+				WebRequestRespondWithError(Request, 431);
 				return;
 			}
 
@@ -685,12 +781,12 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 				Request->RequestHasContentLength = true;
 				if (Extra)
 				{
-					HttpRequestRespondWithError(Request, 400);
+					WebRequestRespondWithError(Request, 400);
 					return;
 				}
 				if (Request->RequestContentLength > HTTP_REQUEST_PARSE_SIZE)
 				{
-					HttpRequestRespondWithError(Request, 413);
+					WebRequestRespondWithError(Request, 413);
 					return;
 				}
 			}
@@ -703,7 +799,7 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 				}
 				else
 				{
-					HttpRequestRespondWithError(Request, 426);
+					WebRequestRespondWithError(Request, 426);
 					return;
 				}
 			}
@@ -717,12 +813,12 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 
 	if (Request->RequestHTTPMethod == 1 && !Request->RequestHasContentLength)
 	{
-		HttpRequestRespondWithError(Request, 411);
+		WebRequestRespondWithError(Request, 411);
 		return;
 	}
 	if (Request->RequestProtocolSwitch && Request->RequestWebSocketKey.Count == 0)
 	{
-		HttpRequestRespondWithError(Request, 400);
+		WebRequestRespondWithError(Request, 400);
 		return;
 	}
 	if (Request->RequestContentLength == 0)
@@ -748,17 +844,17 @@ void ParseHttpRequest(http_server * Server, str8 * RequestData, http_request_slo
 	Request->RequestComplete = true;
 }
 
-http_request * ServerNextRequest(http_server * Server)
+web_request * ServerNextRequest(web_server * Server)
 {
-	for (i32 I = 0; I < HTTP_REQUEST_COUNT; I++)
+	for (i32 I = 0; I < WEB_REQUEST_COUNT; I++)
 	{
-		http_request_slot * Request = &Server->Requests[I];
+		web_request_slot * Request = &Server->Requests[I];
 
-		if (Request->Value.Status == HTTPRequest_Ready)
+		if (Request->Value.Status == WebRequest_Ready)
 		{
-			Request->Value.Status = HTTPRequest_Processed;
+			Request->Value.Status = WebRequest_Processed;
 
-			http_connection_slot * Connection = &Server->Connections[Request->Value.ConnectionIndex];
+			web_connection_slot * Connection = &Server->Connections[Request->Value.ConnectionIndex];
 
 			if (Connection->Value.Valid)
 			{
