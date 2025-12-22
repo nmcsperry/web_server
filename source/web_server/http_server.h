@@ -73,6 +73,7 @@ enum web_request_status
 typedef struct web_request
 {
 	u32 Status;
+	bool32 Synthetic;
 
 	bool8 FrameHTTPMethodComplete;
 	bool8 FrameHeaderComplete;
@@ -158,10 +159,10 @@ bool8 CloseConnection(web_server * Server, web_connection_slot * Connection);
 
 bool8 CloseRequest(web_request_slot * RequestSlot);
 
-void ParseHttpRequest(web_server * Server, web_connection_slot * Connection, str8 * HttpRequest);
+void ParseHttpRequest(web_server * Server, str8 * RequestData, web_request_slot * RequestSlot);
 void ParseWebsocketRequest(web_server * Server, str8 * RequestData, web_request_slot * RequestSlot);
 
-web_request_slot * AddRequest(web_server * Server, web_connection_slot * Connection);
+web_request_slot * AddRequest(web_server * Server, web_connection_slot * Connection, bool32 Synthetic);
 
 str8 HTTPReasonName(u16 Reason);
 str8 WebsocketReasonName(u16 Reason);
