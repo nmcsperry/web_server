@@ -44,45 +44,39 @@ void RespondToRequestWithWebSocketFrame(web_server * Server, web_request_slot * 
 	web_request * Request = &RequestSlot->Value;
 	web_connection * Connection = &ConnectionSlot->Value;
 
-	u8 FinalFrame = 1;
 	u8 Opcode = Request->ResponseCode;
 	if (Request->ResponseCode >= 1000)
 	{
 		Opcode = 8;
 
+		memory_buffer * Buffer = ScratchBufferStart();
+
 		u16 ReasonCode = SwapByteOrderU16(Request->ResponseCode);
-		u8 FirstReasonByte = ReasonCode & 0xff;
-		u8 SecondReasonByte = (ReasonCode & 0xff00) >> 8;
+		BufferPush(Buffer, &ReasonCode, 2);
 
 		if (Request->ResponseBody.Data == 0)
 		{
-			Request->ResponseBody = WebsocketReasonName(Request->ResponseCode);
-		}
-
-		Request->ResponseBody = Str8Fmt(RequestSlot->Arena, "%{char8}%{char8}%{str8}",
-			FirstReasonByte, SecondReasonByte, Request->ResponseBody);
-	}
-
-	u8 FirstByte = (FinalFrame << 7) | Opcode;
-
-	u8 Masked = 0;
-	u8 Length = 0;
-	if (Request->ResponseBody.Data)
-	{
-		if (Request->ResponseBody.Count <= 125)
-		{
-			Length = Request->ResponseBody.Count;
-		}
-		else if (Request->ResponseBody.Count <= U16Max)
-		{
-			Length = 126;
+			Str8WriteStr8(Buffer, WebsocketReasonName(Request->ResponseCode));
 		}
 		else
 		{
-			Length = 127;
+			Str8WriteStr8(Buffer, Request->ResponseBody);
 		}
+
+		Request->ResponseBody = ScratchBufferEndStr8(Buffer, RequestSlot->Arena);
 	}
-	u8 SecondByte = (Masked << 7) | Length;
+	u8 FirstByte = 0x80 | Opcode;
+
+	u8 Length = Request->ResponseBody.Count;
+	if (Request->ResponseBody.Count > U16Max)
+	{
+		Length = 127;
+	}
+	else if (Request->ResponseBody.Count > 125)
+	{
+		Length = 126;
+	}
+	u8 SecondByte = Length;
 
 	memory_buffer * Buffer = ScratchBufferStart();
 	
@@ -95,7 +89,7 @@ void RespondToRequestWithWebSocketFrame(web_server * Server, web_request_slot * 
 		Length = SwapByteOrderU16(Length);
 		BufferPush(Buffer, &Length, 2);
 	}
-	else if (Length == 126)
+	else if (Length == 127)
 	{
 		u64 Length = Request->ResponseBody.Count;
 		Length = SwapByteOrderU64(Length);
