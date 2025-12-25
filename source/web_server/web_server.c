@@ -87,16 +87,15 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
             if (Connection->Value.Valid)
             {
                 HTMLSimpleTagCStr(&Writer, HTMLTag_h3, "Connection");
-                HTMLSimpleTag(&Writer, HTMLTag_p, Str8FromIPAddr(Writer.Arena, Connection->Value.Address));
+                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "IP Address: %{str8}", Str8FromIPAddr(Writer.Arena, Connection->Value.Address));
+
                 datetime Datetime = DatetimeFromUnixTimeSec(Connection->Value.FirstCommunication);
-                HTMLSimpleTag(&Writer, HTMLTag_p, Str8FromDatetime(Writer.Arena, Datetime));
+                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "First Communication: %{str8}", Str8FromDatetime(Writer.Arena, Datetime));
 
                 temp_memory_arena Scratch = GetScratchArena(0, 0);
-                str8 RequestPathHistoryString = Str8FromStr8LL(Arena, Connection->Value.RequestPathHistory);
-                HTMLSimpleTag(&Writer, HTMLTag_p, RequestPathHistoryString);
                 ReleaseScratchArena(Scratch);
 
-                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "%{u32}", Connection->Value.RequestsReceived);
+                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "Total Requests: %{u32}", Connection->Value.RequestsReceived);
             }
         }
     }

@@ -441,11 +441,7 @@ web_request_slot * AddRequest(web_server * Server, web_connection_slot * Connect
 	Request->Value.Status = WebRequest_Parsing;
 	Request->Value.Synthetic = Synthetic;
 
-	// todo: this can be removed, it's just for testing
 	Connection->Value.RequestsReceived++;
-	str8 PathSafe = ArenaPushStr8(Server->Arena, Request->Value.RequestPath);
-	Str8LLPush(Server->Arena, &Connection->Value.RequestPathHistory, Str8Lit(" - "));
-	Str8LLPush(Server->Arena, &Connection->Value.RequestPathHistory, PathSafe);
 
 	return Request;
 }

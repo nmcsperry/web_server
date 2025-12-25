@@ -29,8 +29,6 @@ typedef struct web_connection
 
 	str8 WebSocketPath;
 
-	str8ll RequestPathHistory;
-
 	u32 ParsingRequestIndex;
 	bool32 IsParsingRequest;
 
