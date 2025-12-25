@@ -6,8 +6,8 @@
 #include "../reuse/network/network_include.c"
 #include "../reuse/io/io_include.c"
 
-#include "http_server.h"
-#include "http_server.c"
+#include "server.h"
+#include "server.c"
 #include "html.c"
 
 str8 NotFoundPage(web_server * Server, memory_arena * Arena)
@@ -69,6 +69,17 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer, HTMLTag_body)
     {
+        HTMLTag(&Writer, HTMLTag_img)
+        {
+            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
+        }
+
+        HTMLTag(&Writer, HTMLTag_p)
+        {
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
+            HTMLText(&Writer, Str8Lit("This is a red paragraph"));
+        }
+
         for (u32 I = 0; I < ArrayCount(Server->Connections); I++)
         {
             web_connection_slot * Connection = &Server->Connections[I];
@@ -163,7 +174,7 @@ void EntryHook()
                 StdOutputFmt("Got root request\n\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 200;
-                Request->ResponseBody = WebSocketTestPage(Server.ResponseArena);
+                Request->ResponseBody = MainPage(&Server, Server.ResponseArena);
                 Request->ResponseMimeType = &MimeType_HTML;
             }
             else if (Str8Match(Request->RequestPath, Str8Lit("/post_test"), 0))

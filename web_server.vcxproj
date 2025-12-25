@@ -207,7 +207,7 @@
       <IncludeInUnityFile>false</IncludeInUnityFile>
     </ClCompile>
     <ClCompile Include="source\web_server\html.c" />
-    <ClCompile Include="source\web_server\http_server.c" />
+    <ClCompile Include="source\web_server\server.c" />
     <ClCompile Include="source\web_server\web_server.c" />
   </ItemGroup>
   <ItemGroup>
@@ -274,7 +274,7 @@
     <ClInclude Include="source\reuse\network\network_poll.h" />
     <ClInclude Include="source\reuse\network\network_socket.h" />
     <ClInclude Include="source\web_server\html.h" />
-    <ClInclude Include="source\web_server\http_server.h" />
+    <ClInclude Include="source\web_server\server.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="run\script.js" />

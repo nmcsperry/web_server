@@ -1,5 +1,5 @@
-#ifndef http_server_h
-#define http_server_h
+#ifndef web_server_server_h
+#define web_server_server_h
 
 #include "../reuse/network/network_include.h"
 
@@ -154,17 +154,25 @@ enum websocket_opcode
 web_server ServerInit(socket_handle Socket);
 void ServerLoop(web_server * Server);
 
+void RespondToRequestWithWebSocketFrame(web_server * Server, web_request_slot * RequestSlot, web_connection_slot * ConnectionSlot);
+void RespondToRequestWithHTTP(web_server * Server, web_request_slot * RequestSlot, web_connection_slot * ConnectionSlot);
+void RespondToRequest(web_server * Server, web_request_slot * RequestSlot, web_connection_slot * ConnectionSlot);
+
+web_request_slot * AddRequest(web_server * Server, web_connection_slot * Connection, bool32 Synthetic);
+bool8 CloseRequest(web_request_slot * RequestSlot);
+
 web_connection_slot * AddConnection(web_server * Server, socket_handle Socket, ip_addr Address);
 bool8 CloseConnection(web_server * Server, web_connection_slot * Connection);
-
-bool8 CloseRequest(web_request_slot * RequestSlot);
 
 void ParseHttpRequest(web_server * Server, str8 * RequestData, web_request_slot * RequestSlot);
 void ParseWebsocketRequest(web_server * Server, str8 * RequestData, web_request_slot * RequestSlot);
 
-web_request_slot * AddRequest(web_server * Server, web_connection_slot * Connection, bool32 Synthetic);
+void WebRequestRespondWithError(web_request * Request, u32 Code);
+
+web_request * ServerNextRequest(web_server * Server);
 
 str8 HTTPReasonName(u16 Reason);
+
 str8 WebsocketReasonName(u16 Reason);
 
 #endif

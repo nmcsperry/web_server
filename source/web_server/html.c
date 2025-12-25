@@ -4,7 +4,7 @@
 str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
 {
     html_node * TagStack[HtmlMaxTagDepth] = { 0 };
-    u32 TagChildCountStack[HtmlMaxTagDepth] = { 0 };
+    html_node * TagChildrenStack[HtmlMaxTagDepth] = { 0 };
     u32 StackIndex = 0;
 
     memory_buffer * Buffer = ScratchBufferStart();
@@ -12,60 +12,72 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
     html_node * Node = Nodes;
     while (Node)
     {
-		html_node * TagNode = Node;
+        Str8WriteFmt(Buffer, "<%{str8}", Node->Type->Name);
 
-        Str8WriteFmt(Buffer, "<%{str8}", TagNode->Type->Name);
-
-        if (TagNode->AttrCount)
+        for (html_node * Child = Node->UnorderedChildren; Child; Child = Child->Next)
         {
-            for (u32 Index = 0; Index < TagNode->AttrCount; Index++)
+            if (Child->Type->Class != HtmlNodeClass_Attr)
             {
-                Node = Node->Next;
-                Str8WriteFmt(Buffer, " %{str8}=\"%{str8}\"", Node->Type->Name, Node->Content);
+                continue;
             }
+            Str8WriteFmt(Buffer, " %{str8}=\"%{str8}\"", Child->Type->Name, Child->Content);
         }
 
-        if (TagNode->StyleCount)
+		bool32 FirstStyle = true;
+        for (html_node * Child = Node->UnorderedChildren; Child; Child = Child->Next)
         {
-            Str8WriteFmt(Buffer, " style=\"");
-
-            for (u32 Index = 0; Index < TagNode->StyleCount; Index++)
+            if (Child->Type->Class != HtmlNodeClass_Style)
             {
-                Node = Node->Next;
-                Str8WriteFmt(Buffer, "%{str8}:%{str8};", Node->Type->Name, Node->Content);
+                continue;
             }
-
+            if (FirstStyle)
+            {
+                Str8WriteFmt(Buffer, " style=\"");
+                FirstStyle = false;
+			}
+            Str8WriteFmt(Buffer, "%{str8}:%{str8};", Child->Type->Name, Child->Content);
+        }
+        if (!FirstStyle)
+        {
             Str8WriteFmt(Buffer, "\"");
         }
 
-        Node = Node->Next;
-
-        if (TagNode->ChildTagCount)
+        if (Node->Children)
         {
-            TagStack[StackIndex] = TagNode;
-            TagChildCountStack[StackIndex] = TagNode->ChildTagCount;
-
             Str8WriteFmt(Buffer, ">");
 
+            TagStack[StackIndex] = Node;
+            TagChildrenStack[StackIndex] = Node->Children;
             StackIndex++;
+
+            Node = Node->Children;
         }
         else
         {
-            if (TagNode->Content.Count)
+            if (Node->Content.Count)
             {
-                Str8WriteFmt(Buffer, ">%{str8}</%{str8}>", TagNode->Content, TagNode->Type->Name);
+                Str8WriteFmt(Buffer, ">%{str8}</%{str8}>", Node->Content, Node->Type->Name);
             }
             else
             {
                 Str8WriteFmt(Buffer, " />");
             }
 
-            while (StackIndex && --TagChildCountStack[StackIndex - 1] == 0)
+            // todo: this works but is sort of weird
+            while (StackIndex)
             {
+				TagChildrenStack[StackIndex - 1] = TagChildrenStack[StackIndex - 1]->Next;
+                if (TagChildrenStack[StackIndex - 1] != 0)
+                {
+					Node = TagChildrenStack[StackIndex - 1];
+                    break;
+                }
+
                 Str8WriteFmt(Buffer, "</%{str8}>", TagStack[StackIndex - 1]->Type->Name);
 
                 TagStack[StackIndex - 1] = 0;
                 StackIndex--;
+                Node = 0;
             }
         }
     }
@@ -83,9 +95,49 @@ html_writer HTMLWriterCreate(memory_arena * Arena)
 	
     Writer.DocumentRoot = Root;
     Writer.CurrentTag = Root;
-    Writer.LastNode = Root;
 
 	return Writer;
+}
+
+void HTMLAppendTagOrdered(html_node * Parent, html_node * Child)
+{
+    Child->Next = 0;
+
+    html_node * LastChild = Parent->Children;
+    while (LastChild && LastChild->Next)
+    {
+		LastChild = LastChild->Next;
+    }
+
+    if (LastChild)
+    {
+        LastChild->Next = Child;
+    }
+    else
+    {
+		Parent->Children = Child;
+    }
+}
+
+void HTMLAppendTagUnordered(html_node * Parent, html_node * Child)
+{
+    html_node * PrevSibling = 0;
+    html_node * NextSibling = Parent->UnorderedChildren;
+    while (NextSibling && NextSibling->Type < Child->Type)
+    {
+		PrevSibling = NextSibling;
+        NextSibling = NextSibling->Next;
+    }
+
+	Child->Next = NextSibling;
+    if (PrevSibling)
+    {
+        PrevSibling->Next = Child;
+    }
+    else
+    {
+        Parent->UnorderedChildren = Child;
+	}
 }
 
 html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key)
@@ -94,10 +146,8 @@ html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key
 	Node->Type = Type;
 	Node->Key = Key;
 
-	Writer->CurrentTag->ChildTagCount++;
+	HTMLAppendTagOrdered(Writer->CurrentTag, Node);
 	Writer->CurrentTag = Node;
-    Writer->LastNode->Next = Node;
-    Writer->LastNode = Node;
 	Writer->TagStack[Writer->StackIndex++] = Node;
 
     return Node;
@@ -109,9 +159,7 @@ html_node * HTMLSingleTagKey(html_writer * Writer, html_node_type * Type, u64 Ke
     Node->Type = Type;
     Node->Key = Key;
 
-    Writer->CurrentTag->ChildTagCount++;
-	Writer->LastNode->Next = Node;
-    Writer->LastNode = Node;
+    HTMLAppendTagOrdered(Writer->CurrentTag, Node);
 
     return Node;
 }
@@ -198,11 +246,7 @@ html_node * HTMLAttr(html_writer * Writer, html_node_type * Attr, str8 Value)
     Node->Type = Attr;
     Node->Content = Value;
 
-	// todo: verify attributes directly follow the open tag or another attribute
-
-    Writer->CurrentTag->AttrCount++;
-    Writer->LastNode->Next = Node;
-    Writer->LastNode = Node;
+    HTMLAppendTagUnordered(Writer->CurrentTag, Node);
 }
 
 html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
@@ -213,7 +257,5 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
 
     // todo: verify attributes directly follow the open tag, an attribute or another style
 
-    Writer->CurrentTag->StyleCount++;
-    Writer->LastNode->Next = Node;
-    Writer->LastNode = Node;
+    HTMLAppendTagUnordered(Writer->CurrentTag, Node);
 }

@@ -59,10 +59,8 @@ struct html_node {
 
     str8 Content;
 
-    u32 AttrCount;
-    u32 StyleCount;
-    u32 ChildTagCount;
-
+    html_node * UnorderedChildren;
+    html_node * Children;
     html_node * Next;
 };
 
@@ -73,7 +71,6 @@ typedef struct html_writer
 	memory_arena * Arena;
     html_node * DocumentRoot;
     html_node * CurrentTag;
-	html_node * LastNode;
 
     html_node * TagStack[HtmlMaxTagDepth];
     u32 StackIndex;
