@@ -4,14 +4,16 @@
 str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
 {
     html_node * TagStack[HtmlMaxTagDepth] = { 0 };
-    html_node * TagChildrenStack[HtmlMaxTagDepth] = { 0 };
     u32 StackIndex = 0;
+
+    TagStack[StackIndex++] = Nodes;
 
     memory_buffer * Buffer = ScratchBufferStart();
 
-    html_node * Node = Nodes;
-    while (Node)
+    while (StackIndex)
     {
+        html_node * Node = TagStack[StackIndex - 1];
+
         Str8WriteFmt(Buffer, "<%{str8}", Node->Type->Name);
 
         for (html_node * Child = Node->UnorderedChildren; Child; Child = Child->Next)
@@ -46,11 +48,7 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
         {
             Str8WriteFmt(Buffer, ">");
 
-            TagStack[StackIndex] = Node;
-            TagChildrenStack[StackIndex] = Node->Children;
-            StackIndex++;
-
-            Node = Node->Children;
+            TagStack[StackIndex++] = Node->Children;
         }
         else
         {
@@ -63,21 +61,18 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
                 Str8WriteFmt(Buffer, " />");
             }
 
-            // todo: this works but is sort of weird
             while (StackIndex)
             {
-				TagChildrenStack[StackIndex - 1] = TagChildrenStack[StackIndex - 1]->Next;
-                if (TagChildrenStack[StackIndex - 1] != 0)
+                TagStack[StackIndex - 1] = TagStack[StackIndex - 1]->Next;
+
+                if (TagStack[StackIndex - 1])
                 {
-					Node = TagChildrenStack[StackIndex - 1];
                     break;
                 }
-
-                Str8WriteFmt(Buffer, "</%{str8}>", TagStack[StackIndex - 1]->Type->Name);
-
-                TagStack[StackIndex - 1] = 0;
-                StackIndex--;
-                Node = 0;
+                else if (--StackIndex)
+                {
+                    Str8WriteFmt(Buffer, "</%{str8}>", TagStack[StackIndex - 1]->Type->Name);
+                }
             }
         }
     }
