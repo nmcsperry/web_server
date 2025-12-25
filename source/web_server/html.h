@@ -95,4 +95,29 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value);
 #define HTMLTag(Writer, Type) DeferLoop(HTMLStartTag(Writer, Type), HTMLEndTag(Writer))
 #define HTMLTagKey(Writer, Type, Key) DeferLoop(HTMLStartTagKey(Writer, Type, Key), HTMLEndTag(Writer))
 
+typedef struct html_diff html_diff;
+
+enum html_diff_type {
+    HTMLDiff_Insert  = 0x1,
+    HTMLDiff_Delete  = 0x2,
+    HTMLDiff_Replace = 0x3,
+    HTMLDiff_Move    = 0x4,
+
+    HTMLDiff_Tag     = 0x1 << 4,
+    HTMLDiff_Attr    = 0x2 << 4,
+    HTMLDiff_Style   = 0x3 << 4
+};
+
+struct html_diff {
+    u32 Type;
+    u32 ParentID;
+
+    str8 Content;
+    str8 StyleAttrName;
+    u32 TargetID;
+    u32 ElementIndex;
+
+    html_diff * Next;
+};
+
 #endif

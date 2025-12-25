@@ -255,7 +255,5 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
     Node->Type = Style;
     Node->Content = Value;
 
-    // todo: verify attributes directly follow the open tag, an attribute or another style
-
     HTMLAppendTagUnordered(Writer->CurrentTag, Node);
 }
