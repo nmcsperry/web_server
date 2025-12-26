@@ -62,9 +62,13 @@ struct html_node {
     html_node * UnorderedChildren;
     html_node * Children;
     html_node * Next;
+
+    html_node * DiffTag;
 };
 
 #define HtmlMaxTagDepth 16
+
+html_node DiffTerminator;
 
 typedef struct html_writer
 {
@@ -74,6 +78,9 @@ typedef struct html_writer
 
     html_node * TagStack[HtmlMaxTagDepth];
     u32 StackIndex;
+
+    html_node * DiffRoot;
+    html_node * DiffTagStack[HtmlMaxTagDepth];
 
     bool32 Error;
 	str8 ErrorMessage;

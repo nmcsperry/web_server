@@ -18,20 +18,14 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
 
         for (html_node * Child = Node->UnorderedChildren; Child; Child = Child->Next)
         {
-            if (Child->Type->Class != HtmlNodeClass_Attr)
-            {
-                continue;
-            }
+            if (Child->Type->Class != HtmlNodeClass_Attr) continue;
             Str8WriteFmt(Buffer, " %{str8}=\"%{str8}\"", Child->Type->Name, Child->Content);
         }
 
 		bool32 FirstStyle = true;
         for (html_node * Child = Node->UnorderedChildren; Child; Child = Child->Next)
         {
-            if (Child->Type->Class != HtmlNodeClass_Style)
-            {
-                continue;
-            }
+            if (Child->Type->Class != HtmlNodeClass_Style) continue;
             if (FirstStyle)
             {
                 Str8WriteFmt(Buffer, " style=\"");
@@ -80,7 +74,7 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
     return ScratchBufferEndStr8(Buffer, Arena);
 }
 
-html_writer HTMLWriterCreate(memory_arena * Arena)
+html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot)
 {
     html_writer Writer = { 0 };
     Writer.Arena = Arena;
@@ -90,12 +84,22 @@ html_writer HTMLWriterCreate(memory_arena * Arena)
 	
     Writer.DocumentRoot = Root;
     Writer.CurrentTag = Root;
+    Writer.TagStack[Writer.StackIndex++] = Root;
+
+    if (DiffRoot)
+    {
+        Writer.DiffRoot = DiffRoot;
+        Writer.DiffTagStack[Writer.DiffStackIndex++] = DiffRoot;
+
+        Root->DiffTag = DiffRoot;
+    }
 
 	return Writer;
 }
 
-void HTMLAppendTagOrdered(html_node * Parent, html_node * Child)
+void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
 {
+    html_node * Parent = Writer->CurrentTag;
     Child->Next = 0;
 
     html_node * LastChild = Parent->Children;
@@ -112,10 +116,20 @@ void HTMLAppendTagOrdered(html_node * Parent, html_node * Child)
     {
 		Parent->Children = Child;
     }
+
+    Writer->CurrentTag = Child;
+    Writer->TagStack[Writer->StackIndex++] = Child;
+
+    if (Writer->DiffRoot)
+    {
+
+    }
 }
 
-void HTMLAppendTagUnordered(html_node * Parent, html_node * Child)
+void HTMLAppendTagUnordered(html_writer * Writer, html_node * Child)
 {
+    html_node * Parent = Writer->CurrentTag;
+
     html_node * PrevSibling = 0;
     html_node * NextSibling = Parent->UnorderedChildren;
     while (NextSibling && NextSibling->Type < Child->Type)
@@ -141,9 +155,7 @@ html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key
 	Node->Type = Type;
 	Node->Key = Key;
 
-	HTMLAppendTagOrdered(Writer->CurrentTag, Node);
-	Writer->CurrentTag = Node;
-	Writer->TagStack[Writer->StackIndex++] = Node;
+	HTMLAppendTagOrdered(Writer, Node);
 
     return Node;
 }
@@ -154,7 +166,8 @@ html_node * HTMLSingleTagKey(html_writer * Writer, html_node_type * Type, u64 Ke
     Node->Type = Type;
     Node->Key = Key;
 
-    HTMLAppendTagOrdered(Writer->CurrentTag, Node);
+    HTMLAppendTagOrdered(Writer, Node);
+    HTMLEndTag(Writer);
 
     return Node;
 }
@@ -171,9 +184,8 @@ html_node * HTMLSingleTag(html_writer * Writer, html_node_type * Type)
 
 html_node * HTMLEndTag(html_writer * Writer)
 {
-    if (Writer->StackIndex <= 1)
+    if (Writer->StackIndex == 0)
     {
-		Writer->CurrentTag = Writer->DocumentRoot;
         return 0;
     }
 
@@ -241,7 +253,7 @@ html_node * HTMLAttr(html_writer * Writer, html_node_type * Attr, str8 Value)
     Node->Type = Attr;
     Node->Content = Value;
 
-    HTMLAppendTagUnordered(Writer->CurrentTag, Node);
+    HTMLAppendTagUnordered(Writer, Node);
 }
 
 html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
@@ -250,5 +262,5 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
     Node->Type = Style;
     Node->Content = Value;
 
-    HTMLAppendTagUnordered(Writer->CurrentTag, Node);
+    HTMLAppendTagUnordered(Writer, Node);
 }

@@ -77,7 +77,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
         HTMLTag(&Writer, HTMLTag_p)
         {
             HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
-            HTMLText(&Writer, Str8Lit("This is a red paragraph"));
+            HTMLText(&Writer, Str8Lit("This is a red paragraph."));
         }
 
         for (u32 I = 0; I < ArrayCount(Server->Connections); I++)
