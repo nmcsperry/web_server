@@ -74,7 +74,6 @@ typedef struct html_writer
 {
 	memory_arena * Arena;
     html_node * DocumentRoot;
-    html_node * CurrentTag;
 
     html_node * TagStack[HtmlMaxTagDepth];
     u32 StackIndex;

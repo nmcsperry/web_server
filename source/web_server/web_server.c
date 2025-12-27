@@ -12,7 +12,7 @@
 
 str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 {
-    html_writer Writer = HTMLWriterCreate(Arena);
+    html_writer Writer = HTMLWriterCreate(Arena, 0);
 
     HTMLTag(&Writer, HTMLTag_head)
     {
@@ -32,7 +32,7 @@ str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 
 str8 WebSocketTestPage(memory_arena * Arena)
 {
-    html_writer Writer = HTMLWriterCreate(Arena);
+    html_writer Writer = HTMLWriterCreate(Arena, 0);
 
     HTMLTag(&Writer, HTMLTag_head)
     {
@@ -57,7 +57,7 @@ str8 WebSocketTestPage(memory_arena * Arena)
 
 str8 MainPage(web_server * Server, memory_arena * Arena)
 {
-    html_writer Writer = HTMLWriterCreate(Arena);
+    html_writer Writer = HTMLWriterCreate(Arena, 0);
 
     HTMLTag(&Writer, HTMLTag_head)
     {

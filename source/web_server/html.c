@@ -83,13 +83,12 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot)
 	Root->Type = HTMLTag_html;
 	
     Writer.DocumentRoot = Root;
-    Writer.CurrentTag = Root;
-    Writer.TagStack[Writer.StackIndex++] = Root;
+    Writer.TagStack[0] = Root;
 
     if (DiffRoot)
     {
         Writer.DiffRoot = DiffRoot;
-        Writer.DiffTagStack[Writer.DiffStackIndex++] = DiffRoot;
+        Writer.DiffTagStack[0] = DiffRoot;
 
         Root->DiffTag = DiffRoot;
     }
@@ -99,7 +98,7 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot)
 
 void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
 {
-    html_node * Parent = Writer->CurrentTag;
+    html_node * Parent = Writer->TagStack[Writer->StackIndex];
     Child->Next = 0;
 
     html_node * LastChild = Parent->Children;
@@ -117,18 +116,28 @@ void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
 		Parent->Children = Child;
     }
 
-    Writer->CurrentTag = Child;
-    Writer->TagStack[Writer->StackIndex++] = Child;
+    Writer->StackIndex++;
+    Writer->TagStack[Writer->StackIndex] = Child;
 
     if (Writer->DiffRoot)
     {
-
+        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+        {
+            if (Writer->DiffTagStack[Writer->StackIndex - 1] == &DiffTerminator)
+            {
+                Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+            }
+            else
+            {
+                Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex - 1]->Children;
+            }
+        }
     }
 }
 
 void HTMLAppendTagUnordered(html_writer * Writer, html_node * Child)
 {
-    html_node * Parent = Writer->CurrentTag;
+    html_node * Parent = Writer->TagStack[Writer->StackIndex];
 
     html_node * PrevSibling = 0;
     html_node * NextSibling = Parent->UnorderedChildren;
@@ -189,19 +198,37 @@ html_node * HTMLEndTag(html_writer * Writer)
         return 0;
     }
 
-    Writer->TagStack[Writer->StackIndex--] = 0;
-    Writer->CurrentTag = Writer->TagStack[Writer->StackIndex - 1];
-	return Writer->CurrentTag;
+    Writer->TagStack[Writer->StackIndex] = 0;
+    
+    if (Writer->DiffRoot)
+    {
+        Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
+        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+        {
+            Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+        }
+
+        for (i32 I = Writer->StackIndex; I < HtmlMaxTagDepth; I++)
+        {
+            Writer->DiffTagStack[I] = 0;
+        }
+    }
+    
+    Writer->StackIndex--;
+
+
+
+	return Writer->TagStack[Writer->StackIndex];
 }
 
 html_node * HTMLText(html_writer * Writer, str8 Text)
 {
-    Writer->CurrentTag->Content = Text;
+    Writer->TagStack[Writer->StackIndex]->Content = Text;
 }
 
 html_node * HTMLTextCStr(html_writer * Writer, char * CStr)
 {
-    Writer->CurrentTag->Content = Str8FromCStr(CStr);
+    Writer->TagStack[Writer->StackIndex]->Content = Str8FromCStr(CStr);
 }
 
 html_node * HTMLSimpleTag(html_writer * Writer, html_node_type * Type, str8 String)
