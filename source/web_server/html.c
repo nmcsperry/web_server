@@ -90,7 +90,7 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot)
         Writer.DiffRoot = DiffRoot;
         Writer.DiffTagStack[0] = DiffRoot;
 
-        Root->DiffTag = DiffRoot;
+        // todo: maybe we should check if they are the same type, although we can assume they are...
     }
 
 	return Writer;
@@ -135,6 +135,15 @@ void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
                     Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
                 }
             }
+        }
+
+        if (Writer->DiffTagStack[Writer->StackIndex] == &DiffTerminator)
+        {
+            HTMLDeltaInsert(Writer, Parent, Child);
+        }
+        else if (Writer->DiffTagStack[Writer->StackIndex]->Type != Child->Type)
+        {
+            HTMLDeltaReplace(Writer, Writer->DiffTagStack[Writer->StackIndex], Child);
         }
     }
 }
@@ -202,6 +211,11 @@ html_node * HTMLEndTag(html_writer * Writer)
         return 0;
     }
 
+    if (Writer->DiffRoot && Writer->DiffTagStack[Writer->StackIndex] != &DiffTerminator)
+    {
+        // compare unordered items
+    }
+
     Writer->TagStack[Writer->StackIndex] = 0;
     
     if (Writer->DiffRoot)
@@ -214,7 +228,11 @@ html_node * HTMLEndTag(html_writer * Writer)
 
         for (i32 I = Writer->StackIndex; I < HtmlMaxTagDepth; I++)
         {
-            Writer->DiffTagStack[I] = 0;
+            if (Writer->DiffTagStack[I] != 0)
+            {
+                HTMLDeltaDelete(Writer, Writer->DiffTagStack[I]);
+                Writer->DiffTagStack[I] = 0;
+            }
         }
     }
     

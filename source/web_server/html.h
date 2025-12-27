@@ -62,8 +62,6 @@ struct html_node {
     html_node * UnorderedChildren;
     html_node * Children;
     html_node * Next;
-
-    html_node * DiffTag;
 };
 
 #define HtmlMaxTagDepth 16
@@ -125,5 +123,10 @@ struct html_diff {
 
     html_diff * Next;
 };
+
+html_diff * HTMLDiffDelete(html_writer * Writer, html_node * OldTag);
+html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag);
+html_diff * HTMLDiffInsert(html_writer * Writer, html_node * Parent, html_node * NewTag);
+
 
 #endif
