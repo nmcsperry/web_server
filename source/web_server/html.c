@@ -1,4 +1,5 @@
 #include "../reuse/base/base_include.h"
+#include "../reuse/io/io_include.h"
 #include "html.h"
 
 str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
@@ -139,11 +140,11 @@ void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
 
         if (Writer->DiffTagStack[Writer->StackIndex] == &DiffTerminator)
         {
-            HTMLDeltaInsert(Writer, Parent, Child);
+            HTMLDiffInsertAll(Writer, Parent, Child);
         }
         else if (Writer->DiffTagStack[Writer->StackIndex]->Type != Child->Type)
         {
-            HTMLDeltaReplace(Writer, Writer->DiffTagStack[Writer->StackIndex], Child);
+            HTMLDiffReplace(Writer, Writer->DiffTagStack[Writer->StackIndex], Child);
         }
     }
 }
@@ -213,7 +214,53 @@ html_node * HTMLEndTag(html_writer * Writer)
 
     if (Writer->DiffRoot && Writer->DiffTagStack[Writer->StackIndex] != &DiffTerminator)
     {
-        // compare unordered items
+        html_node * Tag = Writer->TagStack[Writer->StackIndex];
+        html_node * DiffTag = Writer->DiffTagStack[Writer->StackIndex];
+
+        if (Tag->Type == DiffTag->Type)
+        {
+            // compare content
+            if (!Str8Match(Tag->Content, DiffTag->Content, 0))
+            {
+                HTMLDiffReplaceContent(Writer, DiffTag, Tag);
+            }
+
+            // compare unordered items
+            html_node * Child = Tag->UnorderedChildren;
+            html_node * DiffChild = DiffTag->UnorderedChildren;
+
+            while (Child && DiffChild)
+            {
+                if (Child->Type > DiffChild->Type)
+                {
+                    HTMLDiffInsertOne(Writer, Tag, Child);
+                    DiffChild = DiffChild->Next;
+                }
+                else if (Child->Type < DiffChild->Type)
+                {
+                    HTMLDiffDeleteOne(Writer, DiffChild);
+                    Child = Child->Next;
+                }
+                else
+                {
+                    if (!Str8Match(Child->Content, DiffChild->Content, 0))
+                    {
+                        HTMLDiffReplaceContent(Writer, DiffChild, Child);
+                    }
+                    Child = Child->Next;
+                    DiffChild = DiffChild->Next;
+                }
+            }
+
+            if (Child)
+            {
+                HTMLDiffInsertAll(Writer, Tag, Child);
+            }
+            else if (DiffChild)
+            {
+                HTMLDiffDeleteAll(Writer, DiffChild);
+            }
+        }
     }
 
     Writer->TagStack[Writer->StackIndex] = 0;
@@ -226,11 +273,14 @@ html_node * HTMLEndTag(html_writer * Writer)
             Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
         }
 
-        for (i32 I = Writer->StackIndex; I < HtmlMaxTagDepth; I++)
+        for (i32 I = Writer->StackIndex + 1; I < HtmlMaxTagDepth; I++)
         {
             if (Writer->DiffTagStack[I] != 0)
             {
-                HTMLDeltaDelete(Writer, Writer->DiffTagStack[I]);
+                if (Writer->DiffTagStack[I] != &DiffTerminator)
+                {
+                    HTMLDiffDeleteAll(Writer, Writer->DiffTagStack[I]);
+                }
                 Writer->DiffTagStack[I] = 0;
             }
         }
@@ -310,4 +360,38 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
     Node->Content = Value;
 
     HTMLAppendTagUnordered(Writer, Node);
+}
+
+html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * OldTag)
+{
+    StdOutputFmt("Delete a tag of type %{str8}\r\n", OldTag->Type->Name);
+}
+
+html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * OldTags)
+{
+    do {
+        HTMLDiffDeleteOne(Writer, OldTags);
+    } while (OldTags = OldTags->Next);
+}
+
+html_diff * HTMLDiffInsertOne(html_writer * Writer, html_node * Parent, html_node * NewTag)
+{
+    StdOutputFmt("Insert a tag of type %{str8}\r\n", NewTag->Type->Name);
+}
+
+html_diff * HTMLDiffInsertAll(html_writer * Writer, html_node * Parent, html_node * NewTags)
+{
+    do {
+        HTMLDiffInsertOne(Writer, Parent, NewTags);
+    } while (NewTags = NewTags->Next);
+}
+
+html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag)
+{
+    StdOutputFmt("Replace a tag of type %{str8} with a tag of type %{str8}\r\n", OldTag->Type->Name, NewTag->Type->Name);
+}
+
+html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag)
+{
+    StdOutputFmt("Replace content of a tag of type %{str8}\r\n", NewTag->Type->Name);
 }

@@ -57,7 +57,31 @@ str8 WebSocketTestPage(memory_arena * Arena)
 
 str8 MainPage(web_server * Server, memory_arena * Arena)
 {
-    html_writer Writer = HTMLWriterCreate(Arena, 0);
+    html_writer Writer2 = HTMLWriterCreate(Arena, 0);
+
+    HTMLTag(&Writer2, HTMLTag_head)
+    {
+        HTMLTag(&Writer2, HTMLTag_title)
+        {
+            HTMLText(&Writer2, Str8Lit("HTML Builder"));
+        }
+    }
+
+    HTMLTag(&Writer2, HTMLTag_body)
+    {
+        HTMLTag(&Writer2, HTMLTag_img)
+        {
+            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("/my_image.png"));
+        }
+
+        HTMLTag(&Writer2, HTMLTag_p)
+        {
+            HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
+            HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
+        }
+    }
+
+    html_writer Writer = HTMLWriterCreate(Arena, Writer2.DocumentRoot);
 
     HTMLTag(&Writer, HTMLTag_head)
     {
@@ -76,32 +100,36 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
         HTMLTag(&Writer, HTMLTag_p)
         {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("green"));
             HTMLText(&Writer, Str8Lit("This is a red paragraph."));
-        }
-
-        for (u32 I = 0; I < ArrayCount(Server->Connections); I++)
-        {
-            web_connection_slot * Connection = &Server->Connections[I];
-
-            if (Connection->Value.Valid)
-            {
-                HTMLSimpleTagCStr(&Writer, HTMLTag_h3, "Connection");
-                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "IP Address: %{str8}", Str8FromIPAddr(Writer.Arena, Connection->Value.Address));
-
-                datetime Datetime = DatetimeFromUnixTimeSec(Connection->Value.FirstCommunication);
-                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "First Communication: %{str8}", Str8FromDatetime(Writer.Arena, Datetime));
-
-                temp_memory_arena Scratch = GetScratchArena(0, 0);
-                ReleaseScratchArena(Scratch);
-
-                HTMLSimpleTagFmt(&Writer, HTMLTag_p, "Total Requests: %{u32}", Connection->Value.RequestsReceived);
-            }
         }
     }
 
     return Str8FromHTML(Arena, Writer.DocumentRoot);
 }
+
+/*
+
+for (u32 I = 0; I < ArrayCount(Server->Connections); I++)
+{
+    web_connection_slot * Connection = &Server->Connections[I];
+
+    if (Connection->Value.Valid)
+    {
+        HTMLSimpleTagCStr(&Writer, HTMLTag_h3, "Connection");
+        HTMLSimpleTagFmt(&Writer, HTMLTag_p, "IP Address: %{str8}", Str8FromIPAddr(Writer.Arena, Connection->Value.Address));
+
+        datetime Datetime = DatetimeFromUnixTimeSec(Connection->Value.FirstCommunication);
+        HTMLSimpleTagFmt(&Writer, HTMLTag_p, "First Communication: %{str8}", Str8FromDatetime(Writer.Arena, Datetime));
+
+        temp_memory_arena Scratch = GetScratchArena(0, 0);
+        ReleaseScratchArena(Scratch);
+
+        HTMLSimpleTagFmt(&Writer, HTMLTag_p, "Total Requests: %{u32}", Connection->Value.RequestsReceived);
+    }
+}
+
+*/
 
 typedef struct asset
 {

@@ -68,48 +68,17 @@ struct html_node {
 
 html_node DiffTerminator;
 
-typedef struct html_writer
-{
-	memory_arena * Arena;
-    html_node * DocumentRoot;
-
-    html_node * TagStack[HtmlMaxTagDepth];
-    u32 StackIndex;
-
-    html_node * DiffRoot;
-    html_node * DiffTagStack[HtmlMaxTagDepth];
-
-    bool32 Error;
-	str8 ErrorMessage;
-} html_writer;
-
-str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes);
-
-html_writer HTMLWriterCreate(memory_arena * Arena);
-html_node * HTMLStartTag(html_writer * Writer, html_node_type * Type);
-html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key);
-html_node * HTMLEndTag(html_writer * Writer);
-html_node * HTMLSingleTag(html_writer * Writer, html_node_type * Type);
-html_node * HTMLSingleTagKey(html_writer * Writer, html_node_type * Type, u64 Key);
-html_node * HTMLText(html_writer * Writer, str8 Text);
-html_node * HTMLTextFmt(html_writer * Writer, char * Format, ...);
-html_node * HTMLAttr(html_writer * Writer, html_node_type * Attr, str8 Value);
-html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value);
-
-#define HTMLTag(Writer, Type) DeferLoop(HTMLStartTag(Writer, Type), HTMLEndTag(Writer))
-#define HTMLTagKey(Writer, Type, Key) DeferLoop(HTMLStartTagKey(Writer, Type, Key), HTMLEndTag(Writer))
-
 typedef struct html_diff html_diff;
 
 enum html_diff_type {
-    HTMLDiff_Insert  = 0x1,
-    HTMLDiff_Delete  = 0x2,
+    HTMLDiff_Insert = 0x1,
+    HTMLDiff_Delete = 0x2,
     HTMLDiff_Replace = 0x3,
-    HTMLDiff_Move    = 0x4,
+    HTMLDiff_Move = 0x4,
 
-    HTMLDiff_Tag     = 0x1 << 4,
-    HTMLDiff_Attr    = 0x2 << 4,
-    HTMLDiff_Style   = 0x3 << 4
+    HTMLDiff_Tag = 0x1 << 4,
+    HTMLDiff_Attr = 0x2 << 4,
+    HTMLDiff_Style = 0x3 << 4
 };
 
 struct html_diff {
@@ -124,9 +93,44 @@ struct html_diff {
     html_diff * Next;
 };
 
-html_diff * HTMLDiffDelete(html_writer * Writer, html_node * OldTag);
-html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag);
-html_diff * HTMLDiffInsert(html_writer * Writer, html_node * Parent, html_node * NewTag);
+typedef struct html_writer
+{
+	memory_arena * Arena;
+    html_node * DocumentRoot;
 
+    html_node * TagStack[HtmlMaxTagDepth];
+    u32 StackIndex;
+
+    html_node * DiffRoot;
+    html_node * DiffTagStack[HtmlMaxTagDepth];
+    html_diff * Diffs;
+
+    bool32 Error;
+	str8 ErrorMessage;
+} html_writer;
+
+str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes);
+
+html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot);
+html_node * HTMLStartTag(html_writer * Writer, html_node_type * Type);
+html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key);
+html_node * HTMLEndTag(html_writer * Writer);
+html_node * HTMLSingleTag(html_writer * Writer, html_node_type * Type);
+html_node * HTMLSingleTagKey(html_writer * Writer, html_node_type * Type, u64 Key);
+html_node * HTMLText(html_writer * Writer, str8 Text);
+html_node * HTMLTextFmt(html_writer * Writer, char * Format, ...);
+html_node * HTMLAttr(html_writer * Writer, html_node_type * Attr, str8 Value);
+html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value);
+
+#define HTMLTag(Writer, Type) DeferLoop(HTMLStartTag(Writer, Type), HTMLEndTag(Writer))
+#define HTMLTagKey(Writer, Type, Key) DeferLoop(HTMLStartTagKey(Writer, Type, Key), HTMLEndTag(Writer))
+
+html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * OldTag);
+html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * OldTags);
+html_diff * HTMLDiffInsertOne(html_writer * Writer, html_node * Parent, html_node * NewTag);
+html_diff * HTMLDiffInsertAll(html_writer * Writer, html_node * Parent, html_node * NewTags);
+
+html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag);
+html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag);
 
 #endif
