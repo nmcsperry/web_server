@@ -130,6 +130,10 @@ void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
             else
             {
                 Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex - 1]->Children;
+                if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+                {
+                    Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+                }
             }
         }
     }
@@ -215,8 +219,6 @@ html_node * HTMLEndTag(html_writer * Writer)
     }
     
     Writer->StackIndex--;
-
-
 
 	return Writer->TagStack[Writer->StackIndex];
 }
