@@ -92,10 +92,14 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 Las
         Writer.DiffRoot = DiffRoot;
         Writer.DiffTagStack[0] = DiffRoot;
 
+        Root->DiffNode = DiffRoot;
+
         // todo: maybe we should check if they are the same type, although we can assume they are...
     }
 
     Writer.LastId = LastId;
+
+    DiffTerminator.Children = &DiffTerminator;
 
 	return Writer;
 }
@@ -275,42 +279,87 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
     HTMLAppendTagUnordered(Writer, Node);
 }
 
+/*
+
+HOW TO DEAL WITH KEYED ELEMENTS:
+
+ - When we are getting the element to compare with, just ignore/move past anything with keys.
+ - When the *new* element has a key, we don't engage with the diff tag stack at all?
+ - Instead, we find the corresponding element and compare with that
+ - When we *add* an element to something with a key, we re-find the old element (or save it or whatever)
+   and use that as if it's in the stack
+
+We can't put keyed elements in the stack because we need to unwind it later...
+
+When I say "save it or whatever" I mean like save it in the node
+
+*/
+
+html_node * HTMLDiffFindKey(html_node * Node, u64 Key)
+{
+    html_node * Candidate = Node->Children;
+    while (Candidate)
+    {
+        if (Candidate->Key == Key)
+        {
+            return Candidate;
+        }
+        Candidate = Candidate->Next;
+    }
+
+    return 0;
+}
+
+void HTMLDiffPushNode(html_writer * Writer, html_node * Node)
+{
+    Writer->DiffTagStack[Writer->StackIndex] = Node;
+    
+    if (Node == &DiffTerminator) return Node;
+
+    while (Writer->DiffTagStack[Writer->StackIndex] && Writer->DiffTagStack[Writer->StackIndex]->Key)
+    {
+        Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
+    }
+    if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+    {
+        Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+    }
+
+    return Writer->DiffTagStack[Writer->StackIndex];
+}
+
 void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent)
 {
     if (Writer->DiffRoot)
     {
-        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
-        {
-            if (Writer->DiffTagStack[Writer->StackIndex - 1] == &DiffTerminator)
-            {
-                Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
-            }
-            else
-            {
-                Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex - 1]->Children;
-                while (Writer->DiffTagStack[Writer->StackIndex] && Writer->DiffTagStack[Writer->StackIndex]->Key)
-                {
-                    Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
-                }
+        html_node * CompareNode = 0;
 
-                if (Writer->DiffTagStack[Writer->StackIndex] == 0)
-                {
-                    Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
-                }
-            }
-        }
-
-        if (Writer->DiffTagStack[Writer->StackIndex] == &DiffTerminator)
+        if (Node->Key)
         {
-            HTMLDiffInsertAll(Writer, Parent, Node);
-        }
-        else if (Writer->DiffTagStack[Writer->StackIndex]->Type != Node->Type)
-        {
-            HTMLDiffReplace(Writer, Writer->DiffTagStack[Writer->StackIndex], Node);
+            CompareNode = HTMLDiffFindKey(Parent, Node->Key);
         }
         else
         {
-            Node->Id = Writer->DiffTagStack[Writer->StackIndex]->Id;
+            if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+            {
+                HTMLDiffPushNode(Writer, Parent->DiffNode ? Parent->DiffNode->Children : 0);
+            }
+
+            CompareNode = Writer->DiffTagStack[Writer->StackIndex];
+        }
+
+        if (CompareNode == &DiffTerminator || CompareNode == 0)
+        {
+            HTMLDiffInsertAll(Writer, Parent, Node);
+        }
+        else if (CompareNode->Type != Node->Type)
+        {
+            HTMLDiffReplace(Writer, CompareNode, Node);
+        }
+        else
+        {
+            Node->Id = CompareNode->Id;
+            Node->DiffNode = CompareNode;
         }
     }
 }
@@ -320,7 +369,16 @@ void HTMLDiffOnEndNode(html_writer * Writer)
     if (Writer->DiffRoot && Writer->DiffTagStack[Writer->StackIndex] != &DiffTerminator)
     {
         html_node * Tag = Writer->TagStack[Writer->StackIndex];
-        html_node * DiffTag = Writer->DiffTagStack[Writer->StackIndex];
+        html_node * DiffTag = Tag->DiffNode;
+
+        if (Tag->Key)
+        {
+            DiffTag = Tag->DiffNode;
+        }
+        else
+        {
+            DiffTag = Writer->DiffTagStack[Writer->StackIndex];
+        }
 
         if (Tag->Type == DiffTag->Type)
         {
@@ -370,16 +428,7 @@ void HTMLDiffOnEndNode(html_writer * Writer)
 
     if (Writer->DiffRoot)
     {
-        Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
-
-        while (Writer->DiffTagStack[Writer->StackIndex] && Writer->DiffTagStack[Writer->StackIndex]->Key)
-        {
-            Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
-        }
-        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
-        {
-            Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
-        }
+        HTMLDiffPushNode(Writer, Writer->DiffTagStack[Writer->StackIndex]->Next);
 
         for (i32 I = Writer->StackIndex + 1; I < HtmlMaxTagDepth; I++)
         {

@@ -95,7 +95,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
         HTMLTag(&Writer, HTMLTag_p)
         {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("green"));
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
             HTMLText(&Writer, Str8Lit("This is a red paragraph."));
         }
     }

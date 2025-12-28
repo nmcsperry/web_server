@@ -64,6 +64,8 @@ struct html_node {
     html_node * UnorderedChildren;
     html_node * Children;
     html_node * Next;
+
+    html_node * DiffNode;
 };
 
 #define HtmlMaxTagDepth 16
