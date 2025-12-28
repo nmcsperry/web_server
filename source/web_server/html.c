@@ -16,6 +16,7 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
         html_node * Node = TagStack[StackIndex - 1];
 
         Str8WriteFmt(Buffer, "<%{str8}", Node->Type->Name);
+        Str8WriteFmt(Buffer, " id=\"%{u32}\"", Node->Id);
 
         for (html_node * Child = Node->UnorderedChildren; Child; Child = Child->Next)
         {
@@ -75,7 +76,7 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
     return ScratchBufferEndStr8(Buffer, Arena);
 }
 
-html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot)
+html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 LastId)
 {
     html_writer Writer = { 0 };
     Writer.Arena = Arena;
@@ -93,6 +94,8 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot)
 
         // todo: maybe we should check if they are the same type, although we can assume they are...
     }
+
+    Writer.LastId = LastId;
 
 	return Writer;
 }
@@ -117,35 +120,16 @@ void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
 		Parent->Children = Child;
     }
 
+    Child->Index = Parent->ChildCount++;
+
     Writer->StackIndex++;
     Writer->TagStack[Writer->StackIndex] = Child;
 
-    if (Writer->DiffRoot)
-    {
-        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
-        {
-            if (Writer->DiffTagStack[Writer->StackIndex - 1] == &DiffTerminator)
-            {
-                Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
-            }
-            else
-            {
-                Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex - 1]->Children;
-                if (Writer->DiffTagStack[Writer->StackIndex] == 0)
-                {
-                    Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
-                }
-            }
-        }
+    HTMLDiffOnStartNode(Writer, Child, Parent);
 
-        if (Writer->DiffTagStack[Writer->StackIndex] == &DiffTerminator)
-        {
-            HTMLDiffInsertAll(Writer, Parent, Child);
-        }
-        else if (Writer->DiffTagStack[Writer->StackIndex]->Type != Child->Type)
-        {
-            HTMLDiffReplace(Writer, Writer->DiffTagStack[Writer->StackIndex], Child);
-        }
+    if (Child->Id == 0)
+    {
+        Child->Id = ++Writer->LastId;
     }
 }
 
@@ -212,80 +196,9 @@ html_node * HTMLEndTag(html_writer * Writer)
         return 0;
     }
 
-    if (Writer->DiffRoot && Writer->DiffTagStack[Writer->StackIndex] != &DiffTerminator)
-    {
-        html_node * Tag = Writer->TagStack[Writer->StackIndex];
-        html_node * DiffTag = Writer->DiffTagStack[Writer->StackIndex];
-
-        if (Tag->Type == DiffTag->Type)
-        {
-            // compare content
-            if (!Str8Match(Tag->Content, DiffTag->Content, 0))
-            {
-                HTMLDiffReplaceContent(Writer, DiffTag, Tag);
-            }
-
-            // compare unordered items
-            html_node * Child = Tag->UnorderedChildren;
-            html_node * DiffChild = DiffTag->UnorderedChildren;
-
-            while (Child && DiffChild)
-            {
-                if (Child->Type > DiffChild->Type)
-                {
-                    HTMLDiffInsertOne(Writer, Tag, Child);
-                    DiffChild = DiffChild->Next;
-                }
-                else if (Child->Type < DiffChild->Type)
-                {
-                    HTMLDiffDeleteOne(Writer, DiffChild);
-                    Child = Child->Next;
-                }
-                else
-                {
-                    if (!Str8Match(Child->Content, DiffChild->Content, 0))
-                    {
-                        HTMLDiffReplaceContent(Writer, DiffChild, Child);
-                    }
-                    Child = Child->Next;
-                    DiffChild = DiffChild->Next;
-                }
-            }
-
-            if (Child)
-            {
-                HTMLDiffInsertAll(Writer, Tag, Child);
-            }
-            else if (DiffChild)
-            {
-                HTMLDiffDeleteAll(Writer, DiffChild);
-            }
-        }
-    }
+    HTMLDiffOnEndNode(Writer);
 
     Writer->TagStack[Writer->StackIndex] = 0;
-    
-    if (Writer->DiffRoot)
-    {
-        Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
-        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
-        {
-            Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
-        }
-
-        for (i32 I = Writer->StackIndex + 1; I < HtmlMaxTagDepth; I++)
-        {
-            if (Writer->DiffTagStack[I] != 0)
-            {
-                if (Writer->DiffTagStack[I] != &DiffTerminator)
-                {
-                    HTMLDiffDeleteAll(Writer, Writer->DiffTagStack[I]);
-                }
-                Writer->DiffTagStack[I] = 0;
-            }
-        }
-    }
-    
     Writer->StackIndex--;
 
 	return Writer->TagStack[Writer->StackIndex];
@@ -362,8 +275,138 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
     HTMLAppendTagUnordered(Writer, Node);
 }
 
+void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent)
+{
+    if (Writer->DiffRoot)
+    {
+        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+        {
+            if (Writer->DiffTagStack[Writer->StackIndex - 1] == &DiffTerminator)
+            {
+                Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+            }
+            else
+            {
+                Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex - 1]->Children;
+                while (Writer->DiffTagStack[Writer->StackIndex] && Writer->DiffTagStack[Writer->StackIndex]->Key)
+                {
+                    Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
+                }
+
+                if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+                {
+                    Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+                }
+            }
+        }
+
+        if (Writer->DiffTagStack[Writer->StackIndex] == &DiffTerminator)
+        {
+            HTMLDiffInsertAll(Writer, Parent, Node);
+        }
+        else if (Writer->DiffTagStack[Writer->StackIndex]->Type != Node->Type)
+        {
+            HTMLDiffReplace(Writer, Writer->DiffTagStack[Writer->StackIndex], Node);
+        }
+        else
+        {
+            Node->Id = Writer->DiffTagStack[Writer->StackIndex]->Id;
+        }
+    }
+}
+
+void HTMLDiffOnEndNode(html_writer * Writer)
+{
+    if (Writer->DiffRoot && Writer->DiffTagStack[Writer->StackIndex] != &DiffTerminator)
+    {
+        html_node * Tag = Writer->TagStack[Writer->StackIndex];
+        html_node * DiffTag = Writer->DiffTagStack[Writer->StackIndex];
+
+        if (Tag->Type == DiffTag->Type)
+        {
+            // compare content
+            if (!Str8Match(Tag->Content, DiffTag->Content, 0))
+            {
+                HTMLDiffReplaceContent(Writer, DiffTag, Tag);
+            }
+
+            // compare unordered items
+            html_node * Child = Tag->UnorderedChildren;
+            html_node * DiffChild = DiffTag->UnorderedChildren;
+
+            while (Child && DiffChild)
+            {
+                if (Child->Type > DiffChild->Type)
+                {
+                    HTMLDiffInsertOne(Writer, Tag, Child);
+                    DiffChild = DiffChild->Next;
+                }
+                else if (Child->Type < DiffChild->Type)
+                {
+                    HTMLDiffDeleteOne(Writer, DiffChild);
+                    Child = Child->Next;
+                }
+                else
+                {
+                    if (!Str8Match(Child->Content, DiffChild->Content, 0))
+                    {
+                        HTMLDiffReplaceContent(Writer, DiffChild, Child);
+                    }
+                    Child = Child->Next;
+                    DiffChild = DiffChild->Next;
+                }
+            }
+
+            if (Child)
+            {
+                HTMLDiffInsertAll(Writer, Tag, Child);
+            }
+            else if (DiffChild)
+            {
+                HTMLDiffDeleteAll(Writer, DiffChild);
+            }
+        }
+    }
+
+    if (Writer->DiffRoot)
+    {
+        Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
+
+        while (Writer->DiffTagStack[Writer->StackIndex] && Writer->DiffTagStack[Writer->StackIndex]->Key)
+        {
+            Writer->DiffTagStack[Writer->StackIndex] = Writer->DiffTagStack[Writer->StackIndex]->Next;
+        }
+        if (Writer->DiffTagStack[Writer->StackIndex] == 0)
+        {
+            Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+        }
+
+        for (i32 I = Writer->StackIndex + 1; I < HtmlMaxTagDepth; I++)
+        {
+            if (Writer->DiffTagStack[I] != 0)
+            {
+                if (Writer->DiffTagStack[I] != &DiffTerminator)
+                {
+                    HTMLDiffDeleteAll(Writer, Writer->DiffTagStack[I]);
+                }
+                Writer->DiffTagStack[I] = 0;
+            }
+        }
+    }
+}
+
+html_diff * HTMLDiffAppend(html_writer * Writer, html_diff Diff)
+{
+    html_diff * DiffPtr = ArenaPushAndCopy(Writer->Arena, html_diff, &Diff);
+    SLLQueuePush(Writer->Diffs, Writer->DiffsEnd, DiffPtr);
+}
+
 html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * OldTag)
 {
+    HTMLDiffAppend(Writer, (html_diff) {
+        .Type = HTMLDiff_Delete | OldTag->Type->Class,
+        .Old = OldTag
+    });
     StdOutputFmt("Delete a tag of type %{str8}\r\n", OldTag->Type->Name);
 }
 
@@ -376,6 +419,13 @@ html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * OldTags)
 
 html_diff * HTMLDiffInsertOne(html_writer * Writer, html_node * Parent, html_node * NewTag)
 {
+    HTMLDiffAppend(Writer, (html_diff) {
+        .Type = HTMLDiff_Insert | NewTag->Type->Class,
+        .New = NewTag,
+
+        .Index = NewTag->Index,
+        .Parent = Parent
+    });
     StdOutputFmt("Insert a tag of type %{str8}\r\n", NewTag->Type->Name);
 }
 
@@ -388,10 +438,20 @@ html_diff * HTMLDiffInsertAll(html_writer * Writer, html_node * Parent, html_nod
 
 html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag)
 {
+    HTMLDiffAppend(Writer, (html_diff) {
+        .Type = HTMLDiff_Replace | NewTag->Type->Class,
+        .New = NewTag,
+        .Old = OldTag
+    });
     StdOutputFmt("Replace a tag of type %{str8} with a tag of type %{str8}\r\n", OldTag->Type->Name, NewTag->Type->Name);
 }
 
 html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag)
 {
+    HTMLDiffAppend(Writer, (html_diff) {
+        .Type = HTMLDiff_Replace | OldTag->Type->Class | HTMLDiff_TextContent,
+        .New = NewTag,
+        .Old = OldTag
+    });
     StdOutputFmt("Replace content of a tag of type %{str8}\r\n", NewTag->Type->Name);
 }

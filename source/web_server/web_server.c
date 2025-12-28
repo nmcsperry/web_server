@@ -12,7 +12,7 @@
 
 str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 {
-    html_writer Writer = HTMLWriterCreate(Arena, 0);
+    html_writer Writer = HTMLWriterCreate(Arena, 0, 0);
 
     HTMLTag(&Writer, HTMLTag_head)
     {
@@ -32,7 +32,7 @@ str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 
 str8 WebSocketTestPage(memory_arena * Arena)
 {
-    html_writer Writer = HTMLWriterCreate(Arena, 0);
+    html_writer Writer = HTMLWriterCreate(Arena, 0, 0);
 
     HTMLTag(&Writer, HTMLTag_head)
     {
@@ -57,7 +57,7 @@ str8 WebSocketTestPage(memory_arena * Arena)
 
 str8 MainPage(web_server * Server, memory_arena * Arena)
 {
-    html_writer Writer2 = HTMLWriterCreate(Arena, 0);
+    html_writer Writer2 = HTMLWriterCreate(Arena, 0, 0);
 
     HTMLTag(&Writer2, HTMLTag_head)
     {
@@ -69,11 +69,6 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer2, HTMLTag_body)
     {
-        HTMLTag(&Writer2, HTMLTag_img)
-        {
-            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("/my_image.png"));
-        }
-
         HTMLTag(&Writer2, HTMLTag_p)
         {
             HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
@@ -81,7 +76,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
         }
     }
 
-    html_writer Writer = HTMLWriterCreate(Arena, Writer2.DocumentRoot);
+    html_writer Writer = HTMLWriterCreate(Arena, Writer2.DocumentRoot, Writer2.LastId);
 
     HTMLTag(&Writer, HTMLTag_head)
     {
@@ -103,6 +98,14 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
             HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("green"));
             HTMLText(&Writer, Str8Lit("This is a red paragraph."));
         }
+    }
+
+    StdOutputFmt("\r\n");
+    for (html_diff * Diff = Writer.Diffs; Diff; Diff = Diff->Next)
+    {
+        StdOutputFmt("Old: %{str8}, New: %{str8}\r\n",
+            Diff->Old ? Diff->Old->Type->Name : Str8Lit("NULL"),
+            Diff->New ? Diff->New->Type->Name : Str8Lit("NULL"));
     }
 
     return Str8FromHTML(Arena, Writer.DocumentRoot);

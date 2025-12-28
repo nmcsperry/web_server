@@ -53,11 +53,13 @@ typedef struct html_node html_node;
 
 struct html_node {
     u64 Key;
-    hash_value Hash;
+    u32 Id;
+    u32 Index;
 
     html_node_type * Type;
 
     str8 Content;
+    u32 ChildCount;
 
     html_node * UnorderedChildren;
     html_node * Children;
@@ -78,17 +80,18 @@ enum html_diff_type {
 
     HTMLDiff_Tag = 0x1 << 4,
     HTMLDiff_Attr = 0x2 << 4,
-    HTMLDiff_Style = 0x3 << 4
+    HTMLDiff_Style = 0x3 << 4,
+    HTMLDiff_TextContent = 0x4 << 4
 };
 
 struct html_diff {
     u32 Type;
-    u32 ParentID;
 
-    str8 Content;
-    str8 StyleAttrName;
-    u32 TargetID;
-    u32 ElementIndex;
+    html_node * Old;
+    html_node * New;
+
+    html_node * Parent;
+    i32 Index;
 
     html_diff * Next;
 };
@@ -104,6 +107,9 @@ typedef struct html_writer
     html_node * DiffRoot;
     html_node * DiffTagStack[HtmlMaxTagDepth];
     html_diff * Diffs;
+    html_diff * DiffsEnd;
+
+    u32 LastId;
 
     bool32 Error;
 	str8 ErrorMessage;
@@ -111,7 +117,7 @@ typedef struct html_writer
 
 str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes);
 
-html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot);
+html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 LastId);
 html_node * HTMLStartTag(html_writer * Writer, html_node_type * Type);
 html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key);
 html_node * HTMLEndTag(html_writer * Writer);
@@ -124,6 +130,9 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value);
 
 #define HTMLTag(Writer, Type) DeferLoop(HTMLStartTag(Writer, Type), HTMLEndTag(Writer))
 #define HTMLTagKey(Writer, Type, Key) DeferLoop(HTMLStartTagKey(Writer, Type, Key), HTMLEndTag(Writer))
+
+void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent);
+void HTMLDiffOnEndNode(html_writer * Writer);
 
 html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * OldTag);
 html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * OldTags);
