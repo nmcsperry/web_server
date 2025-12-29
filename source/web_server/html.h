@@ -78,12 +78,12 @@ enum html_diff_type {
     HTMLDiff_Insert = 0x1,
     HTMLDiff_Delete = 0x2,
     HTMLDiff_Replace = 0x3,
-    HTMLDiff_Move = 0x4,
+    HTMLDiff_Move = 0x7,
 
     HTMLDiff_Tag = 0x1 << 4,
     HTMLDiff_Attr = 0x2 << 4,
     HTMLDiff_Style = 0x3 << 4,
-    HTMLDiff_TextContent = 0x4 << 4
+    HTMLDiff_Content = 0x4 << 4
 };
 
 struct html_diff {
@@ -143,5 +143,6 @@ html_diff * HTMLDiffInsertAll(html_writer * Writer, html_node * Parent, html_nod
 
 html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag);
 html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag);
+html_diff * HTMLDiffMove(html_writer * Writer, html_node * OldTag, html_node * NewTag);
 
 #endif

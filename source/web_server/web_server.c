@@ -69,7 +69,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer2, HTMLTag_body)
     {
-        HTMLTag(&Writer2, HTMLTag_p)
+        HTMLTagKey(&Writer2, HTMLTag_p, 1)
         {
             HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
             HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
@@ -93,7 +93,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
             HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
         }
 
-        HTMLTag(&Writer, HTMLTag_p)
+        HTMLTagKey(&Writer, HTMLTag_p, 1)
         {
             HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
             HTMLText(&Writer, Str8Lit("This is a red paragraph."));

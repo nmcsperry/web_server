@@ -360,6 +360,11 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
         {
             Node->Id = CompareNode->Id;
             Node->DiffNode = CompareNode;
+
+            if (Node->Key && Node->Index != CompareNode->DiffNode)
+            {
+                HTMLDiffMove(Writer, Node, CompareNode);
+            }
         }
     }
 }
@@ -498,9 +503,20 @@ html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node 
 html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag)
 {
     HTMLDiffAppend(Writer, (html_diff) {
-        .Type = HTMLDiff_Replace | OldTag->Type->Class | HTMLDiff_TextContent,
+        .Type = HTMLDiff_Replace | HTMLDiff_Content | OldTag->Type->Class,
         .New = NewTag,
         .Old = OldTag
     });
     StdOutputFmt("Replace content of a tag of type %{str8}\r\n", NewTag->Type->Name);
+}
+
+html_diff * HTMLDiffMove(html_writer * Writer, html_node * OldTag, html_node * NewTag)
+{
+    HTMLDiffAppend(Writer, (html_diff) {
+        .Type = HTMLDiff_Move | NewTag->Type->Class,
+            .New = NewTag,
+            .Old = OldTag,
+            .Index = NewTag->Index
+    });
+    StdOutputFmt("Move a tag of type %{str8}\r\n", NewTag->Type->Name);
 }
