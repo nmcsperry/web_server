@@ -69,10 +69,18 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer2, HTMLTag_body)
     {
-        HTMLTagKey(&Writer2, HTMLTag_p, 1)
+        HTMLTag(&Writer2, HTMLTag_img)
         {
-            HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
-            HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
+            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("/my_image.png"));
+        }
+
+        HTMLTag(&Writer2, HTMLTag_p)
+        {
+            HTMLTag(&Writer2, HTMLTag_span)
+            {
+                HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
+                HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
+            }
         }
     }
 
@@ -88,15 +96,16 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer, HTMLTag_body)
     {
-        HTMLTag(&Writer, HTMLTag_img)
+        HTMLTagKey(&Writer, HTMLTag_p, 7)
         {
-            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
-        }
-
-        HTMLTagKey(&Writer, HTMLTag_p, 1)
-        {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
-            HTMLText(&Writer, Str8Lit("This is a red paragraph."));
+            HTMLTag(&Writer, HTMLTag_span)
+            {
+                HTMLTag(&Writer, HTMLTag_span)
+                {
+                    HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
+                    HTMLText(&Writer, Str8Lit("This is a red paragraph."));
+                }
+            }
         }
     }
 

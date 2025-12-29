@@ -39,6 +39,7 @@ HTMLTagDef(h2);
 HTMLTagDef(h3);
 HTMLTagDef(img);
 HTMLTagDef(script);
+HTMLTagDef(span);
 
 HTMLAttrDef(src);
 HTMLAttrDef(type);
@@ -112,6 +113,7 @@ typedef struct html_writer
     html_diff * DiffsEnd;
 
     u32 LastId;
+    u32 Replacing;
 
     bool32 Error;
 	str8 ErrorMessage;

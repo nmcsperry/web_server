@@ -205,6 +205,11 @@ html_node * HTMLEndTag(html_writer * Writer)
     Writer->TagStack[Writer->StackIndex] = 0;
     Writer->StackIndex--;
 
+    if (Writer->StackIndex < Writer->Replacing)
+    {
+        Writer->Replacing = 0;
+    }
+
 	return Writer->TagStack[Writer->StackIndex];
 }
 
@@ -355,6 +360,7 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
         else if (CompareNode->Type != Node->Type)
         {
             HTMLDiffReplace(Writer, CompareNode, Node);
+            Writer->Replacing = Writer->StackIndex;
         }
         else
         {
@@ -433,7 +439,8 @@ void HTMLDiffOnEndNode(html_writer * Writer)
 
     if (Writer->DiffRoot)
     {
-        HTMLDiffPushNode(Writer, Writer->DiffTagStack[Writer->StackIndex]->Next);
+        HTMLDiffPushNode(Writer,
+            Writer->DiffTagStack[Writer->StackIndex] ? Writer->DiffTagStack[Writer->StackIndex]->Next : 0);
 
         for (i32 I = Writer->StackIndex + 1; I < HtmlMaxTagDepth; I++)
         {
@@ -451,8 +458,11 @@ void HTMLDiffOnEndNode(html_writer * Writer)
 
 html_diff * HTMLDiffAppend(html_writer * Writer, html_diff Diff)
 {
-    html_diff * DiffPtr = ArenaPushAndCopy(Writer->Arena, html_diff, &Diff);
-    SLLQueuePush(Writer->Diffs, Writer->DiffsEnd, DiffPtr);
+    if (!Writer->Replacing)
+    {
+        html_diff * DiffPtr = ArenaPushAndCopy(Writer->Arena, html_diff, &Diff);
+        SLLQueuePush(Writer->Diffs, Writer->DiffsEnd, DiffPtr);
+    }
 }
 
 html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * OldTag)
