@@ -284,22 +284,6 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value)
     HTMLAppendTagUnordered(Writer, Node);
 }
 
-/*
-
-HOW TO DEAL WITH KEYED ELEMENTS:
-
- - When we are getting the element to compare with, just ignore/move past anything with keys.
- - When the *new* element has a key, we don't engage with the diff tag stack at all?
- - Instead, we find the corresponding element and compare with that
- - When we *add* an element to something with a key, we re-find the old element (or save it or whatever)
-   and use that as if it's in the stack
-
-We can't put keyed elements in the stack because we need to unwind it later...
-
-When I say "save it or whatever" I mean like save it in the node
-
-*/
-
 html_node * HTMLDiffFindKey(html_node * Node, u64 Key)
 {
     html_node * Candidate = Node->Children;
@@ -524,9 +508,10 @@ html_diff * HTMLDiffMove(html_writer * Writer, html_node * OldTag, html_node * N
 {
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Move | NewTag->Type->Class,
-            .New = NewTag,
-            .Old = OldTag,
-            .Index = NewTag->Index
+        .New = NewTag,
+        .Old = OldTag,
+
+        .Index = NewTag->Index
     });
     StdOutputFmt("Move a tag of type %{str8}\r\n", NewTag->Type->Name);
 }
