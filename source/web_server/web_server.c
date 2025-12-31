@@ -82,6 +82,52 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
                 HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
             }
         }
+
+        HTMLTag(&Writer2, HTMLTag_script)
+        {
+            HTMLAttr(&Writer2, HTMLAttr_type, Str8Lit("text/javascript"));
+            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("script.js"));
+            HTMLTextCStr(&Writer2, "var test;");
+        }
+    }
+
+    return Str8FromHTML(Arena, Writer2.DocumentRoot);
+}
+
+str8 MainPageDiff(web_server * Server, memory_arena * Arena)
+{
+    html_writer Writer2 = HTMLWriterCreate(Arena, 0, 0);
+
+    HTMLTag(&Writer2, HTMLTag_head)
+    {
+        HTMLTag(&Writer2, HTMLTag_title)
+        {
+            HTMLText(&Writer2, Str8Lit("HTML Builder"));
+        }
+    }
+
+    HTMLTag(&Writer2, HTMLTag_body)
+    {
+        HTMLTag(&Writer2, HTMLTag_img)
+        {
+            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("/my_image.png"));
+        }
+
+        HTMLTag(&Writer2, HTMLTag_p)
+        {
+            HTMLTag(&Writer2, HTMLTag_span)
+            {
+                HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
+                HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
+            }
+        }
+
+        HTMLTag(&Writer2, HTMLTag_script)
+        {
+            HTMLAttr(&Writer2, HTMLAttr_type, Str8Lit("text/javascript"));
+            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("script.js"));
+            HTMLTextCStr(&Writer2, "var test;");
+        }
     }
 
     html_writer Writer = HTMLWriterCreate(Arena, Writer2.DocumentRoot, Writer2.LastId);
@@ -96,7 +142,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer, HTMLTag_body)
     {
-        HTMLTagKey(&Writer, HTMLTag_p, 7)
+        HTMLTag(&Writer, HTMLTag_p)
         {
             HTMLTag(&Writer, HTMLTag_span)
             {
@@ -106,6 +152,13 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
                     HTMLText(&Writer, Str8Lit("This is a red paragraph."));
                 }
             }
+        }
+
+        HTMLTag(&Writer, HTMLTag_script)
+        {
+            HTMLAttr(&Writer, HTMLAttr_type, Str8Lit("text/javascript"));
+            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("script.js"));
+            HTMLTextCStr(&Writer, "var test;");
         }
     }
 
@@ -117,7 +170,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
             Diff->New ? Diff->New->Type->Name : Str8Lit("NULL"));
     }
 
-    return Str8FromHTML(Arena, Writer.DocumentRoot);
+    return Str8FromHTMLDiff(Arena, Writer.Diffs);
 }
 
 /*
@@ -195,7 +248,7 @@ void EntryHook()
                 StdOutputFmt("Got a websocket request\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 1;
-                Request->ResponseBody = Str8Fmt(Server.ResponseArena, "%{str8} TEST", Request->RequestBody);
+                Request->ResponseBody = MainPageDiff(&Server, Server.ResponseArena);
                 continue;
             }
 

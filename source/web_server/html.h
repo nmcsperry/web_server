@@ -6,8 +6,8 @@
 enum html_node_class
 {
     HtmlNodeClass_Tag = 1,
-    HtmlNodeClass_Attr,
-    HtmlNodeClass_Style,
+    HtmlNodeClass_Attr = 2,
+    HtmlNodeClass_Style = 3,
     HtmlNodeClass_Fragment
 };
 
@@ -76,15 +76,19 @@ html_node DiffTerminator;
 typedef struct html_diff html_diff;
 
 enum html_diff_type {
-    HTMLDiff_Insert = 0x1,
-    HTMLDiff_Delete = 0x2,
-    HTMLDiff_Replace = 0x3,
-    HTMLDiff_Move = 0x7,
+    HTMLDiff_Insert = 0x1 << 4,
+    HTMLDiff_Delete = 0x2 << 4,
+    HTMLDiff_Replace = 0x3 << 4,
+    HTMLDiff_Move = 0x7 << 4,
+    HTMLDiff_ReplaceContent = 0x8 << 4,
 
-    HTMLDiff_Tag = 0x1 << 4,
-    HTMLDiff_Attr = 0x2 << 4,
-    HTMLDiff_Style = 0x3 << 4,
-    HTMLDiff_Content = 0x4 << 4
+    HTMLDiff_OperationMask = 0xf << 4,
+
+    HTMLDiff_Tag = 0x1,
+    HTMLDiff_Attr = 0x2,
+    HTMLDiff_Style = 0x3,
+
+    HTMLDiff_TypeMask = 0xf,
 };
 
 struct html_diff {
@@ -120,6 +124,7 @@ typedef struct html_writer
 } html_writer;
 
 str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes);
+str8 Str8FromHTMLDiff(memory_arena * Arena, html_diff * Deltas);
 
 html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 LastId);
 html_node * HTMLStartTag(html_writer * Writer, html_node_type * Type);
@@ -138,8 +143,8 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value);
 void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent);
 void HTMLDiffOnEndNode(html_writer * Writer);
 
-html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * OldTag);
-html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * OldTags);
+html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * Parent, html_node * OldTag);
+html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * Parent, html_node * OldTags);
 html_diff * HTMLDiffInsertOne(html_writer * Writer, html_node * Parent, html_node * NewTag);
 html_diff * HTMLDiffInsertAll(html_writer * Writer, html_node * Parent, html_node * NewTags);
 

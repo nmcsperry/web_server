@@ -16,12 +16,12 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
         html_node * Node = TagStack[StackIndex - 1];
 
         Str8WriteFmt(Buffer, "<%{str8}", Node->Type->Name);
-        Str8WriteFmt(Buffer, " id=\"%{u32}\"", Node->Id);
+        Str8WriteFmt(Buffer, " id=\'%{u32}\'", Node->Id);
 
         for (html_node * Child = Node->UnorderedChildren; Child; Child = Child->Next)
         {
             if (Child->Type->Class != HtmlNodeClass_Attr) continue;
-            Str8WriteFmt(Buffer, " %{str8}=\"%{str8}\"", Child->Type->Name, Child->Content);
+            Str8WriteFmt(Buffer, " %{str8}=\'%{str8}\'", Child->Type->Name, Child->Content);
         }
 
 		bool32 FirstStyle = true;
@@ -30,14 +30,14 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
             if (Child->Type->Class != HtmlNodeClass_Style) continue;
             if (FirstStyle)
             {
-                Str8WriteFmt(Buffer, " style=\"");
+                Str8WriteFmt(Buffer, " style=\'");
                 FirstStyle = false;
 			}
             Str8WriteFmt(Buffer, "%{str8}:%{str8};", Child->Type->Name, Child->Content);
         }
         if (!FirstStyle)
         {
-            Str8WriteFmt(Buffer, "\"");
+            Str8WriteFmt(Buffer, "\'");
         }
 
         if (Node->Children)
@@ -72,6 +72,75 @@ str8 Str8FromHTML(memory_arena * Arena, html_node * Nodes)
             }
         }
     }
+
+    return ScratchBufferEndStr8(Buffer, Arena);
+}
+
+str8 Str8FromHTMLDiff(memory_arena * Arena, html_diff * Deltas)
+{
+    memory_buffer * Buffer = ScratchBufferStart();
+
+    html_diff * Delta = Deltas;
+    Str8WriteFmt(Buffer, "[");
+
+    bool32 FirstLoop = true;
+    while (Delta)
+    {
+        if (FirstLoop)
+        {
+            FirstLoop = false;
+        }
+        else
+        {
+            Str8WriteFmt(Buffer, ", ");
+        }
+
+        Str8WriteFmt(Buffer, " { \"Type\": %{u32}, ", Delta->Type);
+
+        if ((Delta->Type & HTMLDiff_TypeMask) == HTMLDiff_Tag)
+        {
+            if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Insert)
+            {
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"Content\": \"%{str8}\", \"Index\": %{u32} }",
+                    Delta->Parent->Id, Str8FromHTML(Arena, Delta->New), Delta->Index);
+            }
+            else if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Delete)
+            {
+                Str8WriteFmt(Buffer, "\"ID\": %{u32} }", Delta->Old->Id);
+            }
+            else if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Replace)
+            {
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"Content\": \"%{str8}\" }",
+                    Delta->Old->Id, Str8FromHTML(Arena, Delta->New));
+            }
+            else if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Move)
+            {
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"Index\": %{u32} }",
+                    Delta->Old->Id, Delta->Index);
+            }
+            else if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_ReplaceContent)
+            {
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"Content\": \"%{str8}\" }",
+                    Delta->Old->Id, Delta->New->Content);
+            }
+        }
+        else if ((Delta->Type & HTMLDiff_TypeMask) == HTMLDiff_Attr || (Delta->Type & HTMLDiff_TypeMask) == HTMLDiff_Style)
+        {
+            if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Insert)
+            {
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": %{str8}, \"Content\": %{str8} }",
+                    Delta->Parent->Id, Delta->New->Type->JavaScriptName, Delta->New->Content);
+            }
+            else if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Delete)
+            {
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": %{str8}, \"Content\": null }",
+                    Delta->Parent->Id, Delta->New->Type->JavaScriptName);
+            }
+        }
+
+        Delta = Delta->Next;
+    }
+    Str8WriteFmt(Buffer, " ]");
 
     return ScratchBufferEndStr8(Buffer, Arena);
 }
@@ -396,14 +465,14 @@ void HTMLDiffOnEndNode(html_writer * Writer)
                 }
                 else if (Child->Type < DiffChild->Type)
                 {
-                    HTMLDiffDeleteOne(Writer, DiffChild);
+                    HTMLDiffDeleteOne(Writer, Tag, DiffChild);
                     Child = Child->Next;
                 }
                 else
                 {
                     if (!Str8Match(Child->Content, DiffChild->Content, 0))
                     {
-                        HTMLDiffReplaceContent(Writer, DiffChild, Child);
+                        HTMLDiffInsertOne(Writer, Tag, Child);
                     }
                     Child = Child->Next;
                     DiffChild = DiffChild->Next;
@@ -416,7 +485,7 @@ void HTMLDiffOnEndNode(html_writer * Writer)
             }
             else if (DiffChild)
             {
-                HTMLDiffDeleteAll(Writer, DiffChild);
+                HTMLDiffDeleteAll(Writer, Tag, DiffChild);
             }
         }
     }
@@ -432,7 +501,7 @@ void HTMLDiffOnEndNode(html_writer * Writer)
             {
                 if (Writer->DiffTagStack[I] != &DiffTerminator)
                 {
-                    HTMLDiffDeleteAll(Writer, Writer->DiffTagStack[I]);
+                    HTMLDiffDeleteAll(Writer, 0, Writer->DiffTagStack[I]);
                 }
                 Writer->DiffTagStack[I] = 0;
             }
@@ -449,19 +518,20 @@ html_diff * HTMLDiffAppend(html_writer * Writer, html_diff Diff)
     }
 }
 
-html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * OldTag)
+html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * Parent, html_node * OldTag)
 {
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Delete | OldTag->Type->Class,
-        .Old = OldTag
+        .Old = OldTag,
+        .Parent = Parent
     });
     StdOutputFmt("Delete a tag of type %{str8}\r\n", OldTag->Type->Name);
 }
 
-html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * OldTags)
+html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * Parent, html_node * OldTags)
 {
     do {
-        HTMLDiffDeleteOne(Writer, OldTags);
+        HTMLDiffDeleteOne(Writer, Parent, OldTags);
     } while (OldTags = OldTags->Next);
 }
 
@@ -497,7 +567,7 @@ html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node 
 html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag)
 {
     HTMLDiffAppend(Writer, (html_diff) {
-        .Type = HTMLDiff_Replace | HTMLDiff_Content | OldTag->Type->Class,
+        .Type = HTMLDiff_ReplaceContent | OldTag->Type->Class,
         .New = NewTag,
         .Old = OldTag
     });
