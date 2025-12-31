@@ -128,12 +128,12 @@ str8 Str8FromHTMLDiff(memory_arena * Arena, html_diff * Deltas)
         {
             if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Insert)
             {
-                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": %{str8}, \"Content\": %{str8} }",
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": \"%{str8}\", \"Content\": \"%{str8}\" }",
                     Delta->Parent->Id, Delta->New->Type->JavaScriptName, Delta->New->Content);
             }
             else if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Delete)
             {
-                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": %{str8}, \"Content\": null }",
+                Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": \"%{str8}\", \"Content\": null }",
                     Delta->Parent->Id, Delta->New->Type->JavaScriptName);
             }
         }
@@ -394,7 +394,7 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
 
         if (Node->Key)
         {
-            CompareNode = HTMLDiffFindKey(Parent, Node->Key);
+            CompareNode = HTMLDiffFindKey(Parent->DiffNode, Node->Key);
         }
         else
         {

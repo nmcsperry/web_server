@@ -83,7 +83,7 @@ str8 MainPage(web_server * Server, memory_arena * Arena)
             }
         }
 
-        HTMLTag(&Writer2, HTMLTag_script)
+        HTMLTagKey(&Writer2, HTMLTag_script, 7)
         {
             HTMLAttr(&Writer2, HTMLAttr_type, Str8Lit("text/javascript"));
             HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("script.js"));
@@ -122,7 +122,7 @@ str8 MainPageDiff(web_server * Server, memory_arena * Arena)
             }
         }
 
-        HTMLTag(&Writer2, HTMLTag_script)
+        HTMLTagKey(&Writer2, HTMLTag_script, 7)
         {
             HTMLAttr(&Writer2, HTMLAttr_type, Str8Lit("text/javascript"));
             HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("script.js"));
@@ -142,19 +142,18 @@ str8 MainPageDiff(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer, HTMLTag_body)
     {
-        HTMLTag(&Writer, HTMLTag_p)
+        HTMLTag(&Writer, HTMLTag_img)
         {
-            HTMLTag(&Writer, HTMLTag_span)
-            {
-                HTMLTag(&Writer, HTMLTag_span)
-                {
-                    HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("red"));
-                    HTMLText(&Writer, Str8Lit("This is a red paragraph."));
-                }
-            }
+            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
         }
 
-        HTMLTag(&Writer, HTMLTag_script)
+        HTMLTag(&Writer, HTMLTag_p)
+        {
+            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("green"));
+            HTMLText(&Writer, Str8Lit("This is a red paragraph."));
+        }
+
+        HTMLTagKey(&Writer, HTMLTag_script, 7)
         {
             HTMLAttr(&Writer, HTMLAttr_type, Str8Lit("text/javascript"));
             HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("script.js"));
