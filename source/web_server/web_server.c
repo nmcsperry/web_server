@@ -117,6 +117,7 @@ html_context HTMLStartManaged(web_server * Server, web_request * Request)
         if (!GlobalSessionPool.ArenaOccupancy[I])
         {
             Arena = GlobalSessionPool.Arenas[I];
+            GlobalSessionPool.ArenaOccupancy[I] = true;
             Session->CurrentArenaIndex = I;
             break;
         }
