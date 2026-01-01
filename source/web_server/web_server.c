@@ -142,11 +142,6 @@ str8 MainPageDiff(web_server * Server, memory_arena * Arena)
 
     HTMLTag(&Writer, HTMLTag_body)
     {
-        HTMLTag(&Writer, HTMLTag_img)
-        {
-            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
-        }
-
         HTMLTag(&Writer, HTMLTag_p)
         {
             HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("green"));

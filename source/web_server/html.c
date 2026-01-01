@@ -415,6 +415,8 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
         {
             HTMLDiffReplace(Writer, CompareNode, Node);
             Writer->Replacing = Writer->StackIndex;
+
+            CompareNode->DiffNode = &DiffComplete;
         }
         else
         {
