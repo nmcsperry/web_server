@@ -66,29 +66,32 @@ struct html_node {
     html_node * Children;
     html_node * Next;
 
+    // todo: this isn't strictly needed, it might be a good idea to delete this and then possibly add it again
+    // just to make sure everything is consistent
     html_node * DiffNode;
 };
 
 #define HtmlMaxTagDepth 16
 
 html_node DiffTerminator;
+html_node DiffComplete;
 
 typedef struct html_diff html_diff;
 
 enum html_diff_type {
+    HTMLDiff_OperationMask = 0xf << 4,
+
     HTMLDiff_Insert = 0x1 << 4,
     HTMLDiff_Delete = 0x2 << 4,
     HTMLDiff_Replace = 0x3 << 4,
-    HTMLDiff_Move = 0x7 << 4,
-    HTMLDiff_ReplaceContent = 0x8 << 4,
+    HTMLDiff_Move = 0x4 << 4,
+    HTMLDiff_ReplaceContent = 0x5 << 4,
 
-    HTMLDiff_OperationMask = 0xf << 4,
+    HTMLDiff_TypeMask = 0xf,
 
     HTMLDiff_Tag = 0x1,
     HTMLDiff_Attr = 0x2,
     HTMLDiff_Style = 0x3,
-
-    HTMLDiff_TypeMask = 0xf,
 };
 
 struct html_diff {
@@ -143,11 +146,13 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value);
 void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent);
 void HTMLDiffOnEndNode(html_writer * Writer);
 
-html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * Parent, html_node * OldTag);
-html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * Parent, html_node * OldTags);
-html_diff * HTMLDiffInsertOne(html_writer * Writer, html_node * Parent, html_node * NewTag);
-html_diff * HTMLDiffInsertAll(html_writer * Writer, html_node * Parent, html_node * NewTags);
+html_diff * HTMLDiffAttrSet(html_writer * Writer, html_node * Parent, html_node * NewTag);
+html_diff * HTMLDiffAttrSetRest(html_writer * Writer, html_node * Parent, html_node * NewTag);
+html_diff * HTMLDiffAttrDelete(html_writer * Writer, html_node * Parent, html_node * OldTag);
+html_diff * HTMLDiffAttrDeleteRest(html_writer * Writer, html_node * Parent, html_node * OldTag);
 
+html_diff * HTMLDiffInsert(html_writer * Writer, html_node * Parent, html_node * NewTag);
+html_diff * HTMLDiffDelete(html_writer * Writer, html_node * OldTag);
 html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag);
 html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag);
 html_diff * HTMLDiffMove(html_writer * Writer, html_node * OldTag, html_node * NewTag);

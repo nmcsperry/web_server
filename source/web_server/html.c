@@ -126,15 +126,15 @@ str8 Str8FromHTMLDiff(memory_arena * Arena, html_diff * Deltas)
         }
         else if ((Delta->Type & HTMLDiff_TypeMask) == HTMLDiff_Attr || (Delta->Type & HTMLDiff_TypeMask) == HTMLDiff_Style)
         {
-            if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Insert)
+            if (Delta->New)
             {
                 Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": \"%{str8}\", \"Content\": \"%{str8}\" }",
                     Delta->Parent->Id, Delta->New->Type->JavaScriptName, Delta->New->Content);
             }
-            else if ((Delta->Type & HTMLDiff_OperationMask) == HTMLDiff_Delete)
+            else if (Delta->Old)
             {
                 Str8WriteFmt(Buffer, "\"ID\": %{u32}, \"AttrName\": \"%{str8}\", \"Content\": null }",
-                    Delta->Parent->Id, Delta->New->Type->JavaScriptName);
+                    Delta->Parent->Id, Delta->Old->Type->JavaScriptName);
             }
         }
 
@@ -162,6 +162,7 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 Las
         Writer.DiffTagStack[0] = DiffRoot;
 
         Root->DiffNode = DiffRoot;
+        DiffRoot->DiffNode = &DiffComplete; // todo: is this a good way to do this?
 
         // todo: maybe we should check if they are the same type, although we can assume they are...
     }
@@ -408,7 +409,7 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
 
         if (CompareNode == &DiffTerminator || CompareNode == 0)
         {
-            HTMLDiffInsertAll(Writer, Parent, Node);
+            HTMLDiffInsert(Writer, Parent, Node);
         }
         else if (CompareNode->Type != Node->Type)
         {
@@ -418,7 +419,9 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
         else
         {
             Node->Id = CompareNode->Id;
+
             Node->DiffNode = CompareNode;
+            CompareNode->DiffNode = &DiffComplete; // todo: is this a good way to do this?
 
             if (Node->Key && Node->Index != CompareNode->DiffNode)
             {
@@ -430,22 +433,22 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
 
 void HTMLDiffOnEndNode(html_writer * Writer)
 {
-    if (Writer->DiffRoot && Writer->DiffTagStack[Writer->StackIndex] != &DiffTerminator)
+    if (Writer->DiffRoot)
     {
         html_node * Tag = Writer->TagStack[Writer->StackIndex];
         html_node * DiffTag = Tag->DiffNode;
 
-        if (Tag->Key)
+        if (DiffTag != 0 && DiffTag != &DiffTerminator && Tag->Type == DiffTag->Type)
         {
-            DiffTag = Tag->DiffNode;
-        }
-        else
-        {
-            DiffTag = Writer->DiffTagStack[Writer->StackIndex];
-        }
+            // delete any unmatched children
+            for (html_node * Child = DiffTag->Children; Child; Child = Child->Next)
+            {
+                if (Child->DiffNode != &DiffComplete)
+                {
+                    HTMLDiffDelete(Writer, Child);
+                }
+            }
 
-        if (Tag->Type == DiffTag->Type)
-        {
             // compare content
             if (!Str8Match(Tag->Content, DiffTag->Content, 0))
             {
@@ -453,45 +456,42 @@ void HTMLDiffOnEndNode(html_writer * Writer)
             }
 
             // compare unordered items
-            html_node * Child = Tag->UnorderedChildren;
-            html_node * DiffChild = DiffTag->UnorderedChildren;
+            html_node * AttrChild = Tag->UnorderedChildren;
+            html_node * AttrDiffChild = DiffTag->UnorderedChildren;
 
-            while (Child && DiffChild)
+            while (AttrChild && AttrDiffChild)
             {
-                if (Child->Type > DiffChild->Type)
+                if (AttrChild->Type > AttrDiffChild->Type)
                 {
-                    HTMLDiffInsertOne(Writer, Tag, Child);
-                    DiffChild = DiffChild->Next;
+                    HTMLDiffAttrSet(Writer, Tag, AttrChild);
+                    AttrDiffChild = AttrDiffChild->Next;
                 }
-                else if (Child->Type < DiffChild->Type)
+                else if (AttrChild->Type < AttrDiffChild->Type)
                 {
-                    HTMLDiffDeleteOne(Writer, Tag, DiffChild);
-                    Child = Child->Next;
+                    HTMLDiffAttrDelete(Writer, Tag, AttrDiffChild);
+                    AttrChild = AttrChild->Next;
                 }
                 else
                 {
-                    if (!Str8Match(Child->Content, DiffChild->Content, 0))
+                    if (!Str8Match(AttrChild->Content, AttrDiffChild->Content, 0))
                     {
-                        HTMLDiffInsertOne(Writer, Tag, Child);
+                        HTMLDiffAttrSet(Writer, Tag, AttrChild);
                     }
-                    Child = Child->Next;
-                    DiffChild = DiffChild->Next;
+                    AttrChild = AttrChild->Next;
+                    AttrDiffChild = AttrDiffChild->Next;
                 }
             }
 
-            if (Child)
+            if (AttrChild)
             {
-                HTMLDiffInsertAll(Writer, Tag, Child);
+                HTMLDiffAttrSetRest(Writer, Tag, AttrChild);
             }
-            else if (DiffChild)
+            else if (AttrDiffChild)
             {
-                HTMLDiffDeleteAll(Writer, Tag, DiffChild);
+                HTMLDiffAttrDeleteRest(Writer, Tag, AttrDiffChild);
             }
         }
-    }
 
-    if (Writer->DiffRoot)
-    {
         HTMLDiffPushNode(Writer,
             Writer->DiffTagStack[Writer->StackIndex] ? Writer->DiffTagStack[Writer->StackIndex]->Next : 0);
 
@@ -499,10 +499,6 @@ void HTMLDiffOnEndNode(html_writer * Writer)
         {
             if (Writer->DiffTagStack[I] != 0)
             {
-                if (Writer->DiffTagStack[I] != &DiffTerminator)
-                {
-                    HTMLDiffDeleteAll(Writer, 0, Writer->DiffTagStack[I]);
-                }
                 Writer->DiffTagStack[I] = 0;
             }
         }
@@ -518,24 +514,16 @@ html_diff * HTMLDiffAppend(html_writer * Writer, html_diff Diff)
     }
 }
 
-html_diff * HTMLDiffDeleteOne(html_writer * Writer, html_node * Parent, html_node * OldTag)
+html_diff * HTMLDiffDelete(html_writer * Writer, html_node * OldTag)
 {
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Delete | OldTag->Type->Class,
-        .Old = OldTag,
-        .Parent = Parent
+        .Old = OldTag
     });
     StdOutputFmt("Delete a tag of type %{str8}\r\n", OldTag->Type->Name);
 }
 
-html_diff * HTMLDiffDeleteAll(html_writer * Writer, html_node * Parent, html_node * OldTags)
-{
-    do {
-        HTMLDiffDeleteOne(Writer, Parent, OldTags);
-    } while (OldTags = OldTags->Next);
-}
-
-html_diff * HTMLDiffInsertOne(html_writer * Writer, html_node * Parent, html_node * NewTag)
+html_diff * HTMLDiffInsert(html_writer * Writer, html_node * Parent, html_node * NewTag)
 {
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Insert | NewTag->Type->Class,
@@ -545,13 +533,6 @@ html_diff * HTMLDiffInsertOne(html_writer * Writer, html_node * Parent, html_nod
         .Parent = Parent
     });
     StdOutputFmt("Insert a tag of type %{str8}\r\n", NewTag->Type->Name);
-}
-
-html_diff * HTMLDiffInsertAll(html_writer * Writer, html_node * Parent, html_node * NewTags)
-{
-    do {
-        HTMLDiffInsertOne(Writer, Parent, NewTags);
-    } while (NewTags = NewTags->Next);
 }
 
 html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag)
@@ -584,4 +565,38 @@ html_diff * HTMLDiffMove(html_writer * Writer, html_node * OldTag, html_node * N
         .Index = NewTag->Index
     });
     StdOutputFmt("Move a tag of type %{str8}\r\n", NewTag->Type->Name);
+}
+
+html_diff * HTMLDiffAttrDelete(html_writer * Writer, html_node * Parent, html_node * OldTag)
+{
+    HTMLDiffAppend(Writer, (html_diff) {
+        .Type = OldTag->Type->Class,
+        .Old = OldTag,
+        .Parent = Parent
+    });
+    StdOutputFmt("Delete an attribute of type %{str8}\r\n", OldTag->Type->Name);
+}
+
+html_diff * HTMLDiffAttrDeleteRest(html_writer * Writer, html_node * Parent, html_node * OldTags)
+{
+    do {
+        HTMLDiffAttrDelete(Writer, Parent, OldTags);
+    } while (OldTags = OldTags->Next);
+}
+
+html_diff * HTMLDiffAttrSet(html_writer * Writer, html_node * Parent, html_node * NewTag)
+{
+    HTMLDiffAppend(Writer, (html_diff) {
+        .Type = NewTag->Type->Class,
+        .New = NewTag,
+        .Parent = Parent
+    });
+    StdOutputFmt("Insert an attribute of type %{str8}\r\n", NewTag->Type->Name);
+}
+
+html_diff * HTMLDiffAttrSetRest(html_writer * Writer, html_node * Parent, html_node * NewTags)
+{
+    do {
+        HTMLDiffAttrSet(Writer, Parent, NewTags);
+    } while (NewTags = NewTags->Next);
 }

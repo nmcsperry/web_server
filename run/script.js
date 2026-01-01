@@ -22,8 +22,8 @@ const HTMLDiff_OperationMask = 0xf << 4;
 const HTMLDiff_Insert = 0x1 << 4;
 const HTMLDiff_Delete = 0x2 << 4;
 const HTMLDiff_Replace = 0x3 << 4;
-const HTMLDiff_Move = 0x7 << 4;
-const HTMLDiff_ReplaceContent = 0x8 << 4;
+const HTMLDiff_Move = 0x4 << 4;
+const HTMLDiff_ReplaceContent = 0x5 << 4;
 
 function ApplyDelta(Delta)
 {
