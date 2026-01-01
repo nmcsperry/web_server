@@ -13,6 +13,7 @@
 #include "base_time.h"
 #include "base_format.h"
 #include "base_hash.h"
+#include "base_random.h"
 
 #include "base_logging.h"
 

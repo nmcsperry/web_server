@@ -28,6 +28,7 @@ typedef struct web_connection
 	u32 RequestsReceived;
 
 	str8 WebSocketPath;
+	u64 WebSocketSessionCookie;
 
 	u32 ParsingRequestIndex;
 	bool32 IsParsingRequest;
@@ -72,6 +73,7 @@ typedef struct web_request
 {
 	u32 Status;
 	bool32 Synthetic;
+	u32 ProtocolType;
 
 	bool8 FrameHTTPMethodComplete;
 	bool8 FrameHeaderComplete;
@@ -92,12 +94,16 @@ typedef struct web_request
 	u32 RequestProtocolSwitch;
 	str8 RequestWebSocketKey;
 
+	u64 RequestSessionCookie;
+
 	u32 ConnectionIndex;
 
 	u16 ResponseBehavior;
 	u16 ResponseCode;
 	str8 ResponseBody;
 	mime_type * ResponseMimeType;
+
+	u64 ResponseSessionCookie;
 
 	memory_buffer BodyBuffer;
 

@@ -194,6 +194,7 @@ void ServerLoop(web_server * Server)
 			if (Request->RequestComplete)
 			{
 				Request->Status = WebRequest_Ready;
+				Request->ProtocolType = Connection->Value.ProtocolType;
 				Connection->Value.IsParsingRequest = false;
 				Connection->Value.ParsingRequestIndex = 0;
 
@@ -203,11 +204,13 @@ void ServerLoop(web_server * Server)
 					{
 						Connection->Value.ProtocolType = WebProtocol_WebSocket;
 						Connection->Value.WebSocketPath = ArenaPushStr8(Connection->Arena, Request->RequestPath);
+						Connection->Value.WebSocketSessionCookie = Request->RequestSessionCookie;
 					}
-					else
-					{
-						Connection->Value.ProtocolType = WebProtocol_HTTP;
-					}
+				}
+				else
+				{
+					Request->RequestPath = Connection->Value.WebSocketPath;
+					Request->RequestSessionCookie = Connection->Value.WebSocketSessionCookie;
 				}
 			}
 
@@ -342,6 +345,11 @@ void RespondToRequestWithHTTP(web_server * Server, web_request_slot * RequestSlo
 	if (Request->ResponseBehavior && Request->ResponseCode >= 500)
 	{
 		Request->ResponseBehavior |= ResponseBehavior_Close;
+	}
+
+	if (Request->ResponseSessionCookie)
+	{
+		Str8WriteFmt(Buffer, "Set-Cookie: Session=%{hex64}\r\n", Request->ResponseSessionCookie);
 	}
 
 	if (Request->RequestProtocolSwitch == WebProtocol_WebSocket)
@@ -589,7 +597,7 @@ void ParseHttpRequest(web_server * Server, str8 * RequestData, web_request_slot 
 			if (Str8Match(HeaderKey.String, Str8Lit("Content-Length"), MatchFlag_IgnoreCase))
 			{
 				void * Extra = 0;
-				Request->RequestContentLength = IntFromStr8(HeaderValue, Extra);
+				Request->RequestContentLength = I32FromStr8(HeaderValue, Extra);
 				Request->RequestHasContentLength = true;
 				if (Extra)
 				{
@@ -619,6 +627,14 @@ void ParseHttpRequest(web_server * Server, str8 * RequestData, web_request_slot 
 			if (Str8Match(HeaderKey.String, Str8Lit("Sec-Websocket-Key"), MatchFlag_IgnoreCase))
 			{
 				Request->RequestWebSocketKey = ArenaPushStr8(Arena, HeaderValue);
+			}
+
+			if (Str8Match(HeaderKey.String, Str8Lit("Cookie"), MatchFlag_IgnoreCase))
+			{
+				str8 Cut1 = Str8CutFind(HeaderValue, Str8Lit("Session=")).Second;
+				str8 Cut2 = Str8CutFind(Cut1, Str8Lit(";")).First;
+
+				Request->RequestSessionCookie = U64FromHexStr8(Cut2, 0);
 			}
 		}
 	}

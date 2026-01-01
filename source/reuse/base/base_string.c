@@ -911,7 +911,7 @@ str8 Str8ParseNextTokenWithWhitespace(str8 * String)
 
 // parse numbers
 
-i32 IntFromStr8(str8 String, str8 * OutRemainder)
+i32 I32FromStr8(str8 String, str8 * OutRemainder)
 {
 	i32 Result = 0;
 	bool32 Negative = false;
@@ -935,7 +935,7 @@ i32 IntFromStr8(str8 String, str8 * OutRemainder)
 	return Result * (Negative ? -1 : 1);
 }
 
-i32 IntFromHexStr8(str8 String, str8 * OutRemainder)
+i32 I32FromHexStr8(str8 String, str8 * OutRemainder)
 {
 	i32 Result = 0;
 	bool32 Negative = false;
@@ -963,6 +963,32 @@ i32 IntFromHexStr8(str8 String, str8 * OutRemainder)
 	return Result * (Negative ? -1 : 1);
 }
 
+u64 U64FromHexStr8(str8 String, str8 * OutRemainder)
+{
+	u64 Result = 0;
+
+	if (OutRemainder) *OutRemainder = Str8Empty();
+
+	for (u32 Place = 0; Place < String.Count; Place++)
+	{
+		char8 Digit = String.Data[Place];
+		if (!Char8IsHexNumeric(Digit))
+		{
+			if (OutRemainder) *OutRemainder = Str8Substr(String, Place, String.Count);
+			return Result;
+		}
+		Result <<= 4;
+		if (Char8IsNumeric(Digit)) {
+			Result += Digit - '0';
+		}
+		else {
+			Result += (Char8Lower(Digit) - 'a') + 10;
+		}
+	}
+
+	return Result;
+}
+
 bool32 BoolFromStr8(str8 String)
 {
 	if (Str8Match(String, Str8Lit("true"), MatchFlag_Normal))
@@ -974,15 +1000,16 @@ bool32 BoolFromStr8(str8 String)
 		return false;
 	}
 
-	// some sort of error logging?
+	// todo: some sort of error logging?
 
 	return false;
 }
 
-f32 FloatFromStr8(str8 String, str8 * OutRemainder)
+// todo: this is probably not a good way to do this
+f32 F32FromStr8(str8 String, str8 * OutRemainder)
 {
 	str8 Remainder;
-	f32 FirstPart = (f32) IntFromStr8(String, &Remainder);
+	f32 FirstPart = (f32) I32FromStr8(String, &Remainder);
 
 	if (Remainder.Count && Remainder.Data[0] == '.')
 	{
@@ -990,7 +1017,7 @@ f32 FloatFromStr8(str8 String, str8 * OutRemainder)
 		if (Remainder.Count > 4) Remainder.Count = 4;
 
 		u32 DecimalLength = Remainder.Count;
-		f32 SecondPart = (f32) IntFromStr8(Remainder, &Remainder);
+		f32 SecondPart = (f32) I32FromStr8(Remainder, &Remainder);
 		DecimalLength -= Remainder.Count;
 
 		FirstPart += (SecondPart / DecPowers[DecimalLength]);
@@ -1344,7 +1371,7 @@ void Str8WriteAndURLUnescapeStr8(memory_buffer * Buffer, str8 EscapedString)
 			Str8WriteStr8(Buffer, CurrentSegment);
 
 			str8 PercentCodeString = (str8) { .Data = &EscapedString.Data[CharIndex] + 1, .Count = 2};
-			char8 EscapedChar = (char8) IntFromHexStr8(PercentCodeString, 0);
+			char8 EscapedChar = (char8) I32FromHexStr8(PercentCodeString, 0);
 
 			Str8WriteChar8(Buffer, EscapedChar);
 

@@ -1,9 +1,5 @@
 const Socket = new WebSocket("ws://localhost");
 
-Socket.onopen = function(Event)
-{
-    Socket.send("a");
-}
 Socket.onmessage = function(Event)
 {
     const Deltas = JSON.parse(Event.data);
@@ -86,4 +82,9 @@ function ApplyDelta(Delta)
             Element.style[Delta.AttrName] = null;
         }
     }
+}
+
+function Interact(Element)
+{
+    Socket.send(Element.id);
 }

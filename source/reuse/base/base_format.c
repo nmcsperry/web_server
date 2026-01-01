@@ -61,7 +61,7 @@ format_properties ParseFormatProperties(str8 FormatString, va_list_ptr FormatArg
 			}
 			else
 			{
-				Value = IntFromStr8(Token, 0);
+				Value = I32FromStr8(Token, 0);
 			}
 			Result.IntegerProperties[ArgType - 4] = Value;
 		}

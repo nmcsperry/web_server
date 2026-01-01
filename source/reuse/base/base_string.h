@@ -193,10 +193,11 @@ str8 Str8ParseNextTokenWithWhitespace(str8 * String);
 
 // parse numbers
 
-i32 IntFromStr8(str8 String, str8 * OutRemainder);
-i32 IntFromHexStr8(str8 String, str8 * OutRemainder);
+i32 I32FromStr8(str8 String, str8 * OutRemainder);
+i32 I32FromHexStr8(str8 String, str8 * OutRemainder);
+u64 U64FromHexStr8(str8 String, str8 * OutRemainder);
 bool32 BoolFromStr8(str8 String);
-f32 FloatFromStr8(str8 String, str8 * OutRemainder);
+f32 F32FromStr8(str8 String, str8 * OutRemainder);
 
 // arena stuff
 

@@ -40,9 +40,12 @@ HTMLTagDef(h3);
 HTMLTagDef(img);
 HTMLTagDef(script);
 HTMLTagDef(span);
+HTMLTagDef(button);
+HTMLTagDef(div);
 
 HTMLAttrDef(src);
 HTMLAttrDef(type);
+HTMLAttrDef(onclick);
 
 HTMLStyleDef(color, color);
 

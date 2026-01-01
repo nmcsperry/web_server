@@ -85,6 +85,7 @@ typedef struct datetime {
 // 36524 * 4 = 146096 (and then +1 for unskipped leap year)
 #define DAYS_IN_QUADCENTURY 146097
 
+// Unix epoch is January 1st, 1970
 #define DAYS_SINCE_JAN1_1AD_TO_UNIX_EPOCH (DAYS_IN_QUADCENTURY * 4 + DAYS_IN_CENTURY * 3 + 17 * DAYS_IN_QUADYEAR + 2 * DAYS_IN_REGULAR_YEAR)
 
 bool32 IsLeapYear(u32 Year);

@@ -10,6 +10,199 @@
 #include "server.c"
 #include "html.c"
 
+#define ManagedHTMLSessionCount 16
+
+typedef struct managed_html_session
+{
+    bool32 Valid;
+    u64 SessionId;
+
+    i32 LastArenaIndex;
+    i32 CurrentArenaIndex;
+
+    html_node * LastDocument;
+    u32 LastDocumentId;
+
+    u64 FirstCommunication; // Unix time in seconds
+    u64 LastCommunication;  // Unix time in seconds
+
+    u32 Messages;
+} managed_html_session;
+
+typedef struct managed_html_session_pool
+{
+    managed_html_session Sessions[ManagedHTMLSessionCount];
+    memory_arena * Arenas[ManagedHTMLSessionCount * 2];
+    bool32 ArenaOccupancy[ManagedHTMLSessionCount * 2];
+
+    random_series Random;
+} managed_html_session_pool;
+
+managed_html_session_pool GlobalSessionPool;
+
+typedef struct html_context
+{
+    bool32 Valid;
+    html_writer Writer;
+    managed_html_session * Session;
+} html_context;
+
+void ManagedHTMLSessionsInit()
+{
+    GlobalSessionPool.Random = RandomSeriesCreate(0);
+    for (i32 I = 0; I < ManagedHTMLSessionCount * 2; I++)
+    {
+        GlobalSessionPool.Arenas[I] = ArenaCreateAdv(Kilobytes(4), 0, 0);
+    }
+}
+
+managed_html_session * CreateManagedHTMLSession()
+{
+    for (i32 I = 0; I < ManagedHTMLSessionCount; I++)
+    {
+        managed_html_session * Session = &GlobalSessionPool.Sessions[I];
+        if (!Session->Valid)
+        {
+            OSZeroMemory(Session, sizeof(managed_html_session));
+
+            Session->Valid = true;
+            Session->SessionId = RandomU64(&GlobalSessionPool.Random);
+
+            Session->LastArenaIndex = -1;
+            Session->CurrentArenaIndex = -1;
+
+            Session->FirstCommunication = UnixTimeSec();
+
+            return Session;
+        }
+    }
+
+    return 0;
+}
+
+managed_html_session * FindManagedHTMLSession(u64 SessionId)
+{
+    for (i32 I = 0; I < ManagedHTMLSessionCount; I++)
+    {
+        managed_html_session * Session = &GlobalSessionPool.Sessions[I];
+        if (Session->Valid && Session->SessionId == SessionId)
+        {
+            return Session;
+        }
+    }
+
+    return 0;
+}
+
+html_context HTMLStartManaged(web_server * Server, web_request * Request)
+{
+    managed_html_session * Session = 0;
+    if (Request->ProtocolType == WebProtocol_HTTP)
+    {
+        Session = CreateManagedHTMLSession();
+    }
+    else if (Request->ProtocolType == WebProtocol_WebSocket && Request->RequestSessionCookie)
+    {
+        Session = FindManagedHTMLSession(Request->RequestSessionCookie);
+    }
+
+    if (Session == 0)
+    {
+        return (html_context) { 0 };
+    }
+
+    memory_arena * Arena = 0;
+    for (i32 I = 0; I < ManagedHTMLSessionCount * 2; I++)
+    {
+        if (!GlobalSessionPool.ArenaOccupancy[I])
+        {
+            Arena = GlobalSessionPool.Arenas[I];
+            Session->CurrentArenaIndex = I;
+            break;
+        }
+    }
+    if (Arena == 0)
+    {
+        return (html_context) { 0 };
+    }
+
+    if (Session->Messages == 0)
+    {
+        return (html_context) {
+            .Valid = true,
+            .Writer = HTMLWriterCreate(Arena, 0, 0),
+            .Session = Session
+        };
+    }
+    else
+    {
+        return (html_context) {
+            .Valid = true,
+            .Writer = HTMLWriterCreate(Arena, Session->LastDocument, Session->LastDocumentId),
+            .Session = Session
+        };
+    }
+}
+
+html_context HTMLStartPlain(web_server * Server, web_request * Request)
+{
+    return (html_context) {
+        .Valid = true,
+        .Writer = HTMLWriterCreate(Server->ResponseArena, 0, 0),
+        .Session = 0
+    };
+}
+
+void HTMLFulfillRequest(web_server * Server, html_context Context, web_request * Request)
+{
+    if (!Context.Valid)
+    {
+        Request->ResponseBehavior = ResponseBehavior_Respond;
+        Request->ResponseCode = 500;
+        Request->ResponseMimeType = &MimeType_Text;
+        Request->ResponseBody = Str8Lit("Error");
+
+        return;
+    }
+
+    if (Context.Session)
+    {
+        if (Context.Session->Messages == 0)
+        {
+            Request->ResponseBehavior = ResponseBehavior_Respond;
+            Request->ResponseCode = 200;
+            Request->ResponseMimeType = &MimeType_HTML;
+            Request->ResponseBody = Str8FromHTML(Server->ResponseArena, Context.Writer.DocumentRoot);
+            Request->ResponseSessionCookie = Context.Session->SessionId;
+        }
+        else
+        {
+            Request->ResponseBehavior = ResponseBehavior_Respond;
+            Request->ResponseCode = 1;
+            Request->ResponseBody = Str8FromHTMLDiff(Server->ResponseArena, Context.Writer.Diffs);
+
+            ArenaReset(GlobalSessionPool.Arenas[Context.Session->LastArenaIndex]);
+            GlobalSessionPool.ArenaOccupancy[Context.Session->LastArenaIndex] = false;
+        }
+
+        Context.Session->Messages++;
+        Context.Session->LastCommunication = UnixTimeSec();
+
+        Context.Session->LastArenaIndex = Context.Session->CurrentArenaIndex;
+        Context.Session->CurrentArenaIndex = -1;
+
+        Context.Session->LastDocument = Context.Writer.DocumentRoot;
+        Context.Session->LastDocumentId = Context.Writer.LastId;
+    }
+    else
+    {
+        Request->ResponseBehavior = ResponseBehavior_Respond;
+        Request->ResponseCode = 200;
+        Request->ResponseMimeType = &MimeType_HTML;
+        Request->ResponseBody = Str8FromHTML(Server->ResponseArena, Context.Writer.DocumentRoot);
+    }
+}
+
 str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 {
     html_writer Writer = HTMLWriterCreate(Arena, 0, 0);
@@ -30,141 +223,82 @@ str8 NotFoundPage(web_server * Server, memory_arena * Arena)
     return Str8FromHTML(Arena, Writer.DocumentRoot);
 }
 
-str8 WebSocketTestPage(memory_arena * Arena)
+bool32 HTMLElementWasClicked(web_request * Request, html_writer * Writer)
 {
-    html_writer Writer = HTMLWriterCreate(Arena, 0, 0);
-
-    HTMLTag(&Writer, HTMLTag_head)
+    if (Request->ProtocolType == WebProtocol_HTTP)
     {
-        HTMLTag(&Writer, HTMLTag_title)
-        {
-            HTMLText(&Writer, Str8Lit("WebSocket Test"));
-        }
+        return false;
     }
-
-    HTMLTag(&Writer, HTMLTag_body)
-    {
-        HTMLTag(&Writer, HTMLTag_script)
-        {
-            HTMLAttr(&Writer, HTMLAttr_type, Str8Lit("text/javascript"));
-            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("script.js"));
-            HTMLTextCStr(&Writer, "var test;");
-        }
-    }
-
-    return Str8FromHTML(Arena, Writer.DocumentRoot);
+    i32 ClientID = I32FromStr8(Request->RequestBody, 0);
+    return ClientID == Writer->TagStack[Writer->StackIndex]->Id;
 }
 
-str8 MainPage(web_server * Server, memory_arena * Arena)
+bool32 HTMLButton(web_request * Request, html_writer * Writer, str8 Text)
 {
-    html_writer Writer2 = HTMLWriterCreate(Arena, 0, 0);
-
-    HTMLTag(&Writer2, HTMLTag_head)
+    bool32 Result;
+    HTMLTag(Writer, HTMLTag_button)
     {
-        HTMLTag(&Writer2, HTMLTag_title)
-        {
-            HTMLText(&Writer2, Str8Lit("HTML Builder"));
-        }
+        HTMLAttr(Writer, HTMLAttr_onclick, Str8Lit("Interact(this)"));
+        HTMLText(Writer, Text);
+        Result = HTMLElementWasClicked(Request, Writer);
     }
+    return Result;
+}
 
-    HTMLTag(&Writer2, HTMLTag_body)
+i32 GlobalCounter = 0;
+
+void MainPage(web_server * Server, web_request * Request)
+{
+    html_context Ctx = HTMLStartManaged(Server, Request);
+
+    if (Ctx.Valid)
     {
-        HTMLTag(&Writer2, HTMLTag_img)
+        HTMLTag(&Ctx.Writer, HTMLTag_head)
         {
-            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("/my_image.png"));
-        }
-
-        HTMLTag(&Writer2, HTMLTag_p)
-        {
-            HTMLTag(&Writer2, HTMLTag_span)
+            HTMLTag(&Ctx.Writer, HTMLTag_title)
             {
-                HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
-                HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
+                HTMLText(&Ctx.Writer, Str8Lit("HTML Builder"));
             }
         }
 
-        HTMLTagKey(&Writer2, HTMLTag_script, 7)
+        HTMLTag(&Ctx.Writer, HTMLTag_body)
         {
-            HTMLAttr(&Writer2, HTMLAttr_type, Str8Lit("text/javascript"));
-            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("script.js"));
-            HTMLTextCStr(&Writer2, "var test;");
-        }
-    }
-
-    return Str8FromHTML(Arena, Writer2.DocumentRoot);
-}
-
-str8 MainPageDiff(web_server * Server, memory_arena * Arena)
-{
-    html_writer Writer2 = HTMLWriterCreate(Arena, 0, 0);
-
-    HTMLTag(&Writer2, HTMLTag_head)
-    {
-        HTMLTag(&Writer2, HTMLTag_title)
-        {
-            HTMLText(&Writer2, Str8Lit("HTML Builder"));
-        }
-    }
-
-    HTMLTag(&Writer2, HTMLTag_body)
-    {
-        HTMLTag(&Writer2, HTMLTag_img)
-        {
-            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("/my_image.png"));
-        }
-
-        HTMLTag(&Writer2, HTMLTag_p)
-        {
-            HTMLTag(&Writer2, HTMLTag_span)
+            if (HTMLButton(Request, &Ctx.Writer, Str8Lit("Increment!")))
             {
-                HTMLStyle(&Writer2, HTMLStyle_color, Str8Lit("red"));
-                HTMLText(&Writer2, Str8Lit("This is a red paragraph."));
+                GlobalCounter++;
+            }
+
+            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_span, "%{i32}", GlobalCounter);
+
+            HTMLTag(&Ctx.Writer, HTMLTag_img)
+            {
+                HTMLAttr(&Ctx.Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
+            }
+
+            HTMLTag(&Ctx.Writer, HTMLTag_p)
+            {
+                HTMLTag(&Ctx.Writer, HTMLTag_span)
+                {
+                    HTMLStyle(&Ctx.Writer, HTMLStyle_color, Str8Lit("red"));
+                    HTMLText(&Ctx.Writer, Str8Lit("This is a red paragraph."));
+                }
+            }
+
+            HTMLTagKey(&Ctx.Writer, HTMLTag_script, 7)
+            {
+                HTMLAttr(&Ctx.Writer, HTMLAttr_type, Str8Lit("text/javascript"));
+                HTMLAttr(&Ctx.Writer, HTMLAttr_src, Str8Lit("script.js"));
+                HTMLTextCStr(&Ctx.Writer, "var test;");
             }
         }
-
-        HTMLTagKey(&Writer2, HTMLTag_script, 7)
-        {
-            HTMLAttr(&Writer2, HTMLAttr_type, Str8Lit("text/javascript"));
-            HTMLAttr(&Writer2, HTMLAttr_src, Str8Lit("script.js"));
-            HTMLTextCStr(&Writer2, "var test;");
-        }
     }
-
-    html_writer Writer = HTMLWriterCreate(Arena, Writer2.DocumentRoot, Writer2.LastId);
-
-    HTMLTag(&Writer, HTMLTag_head)
+    else
     {
-        HTMLTag(&Writer, HTMLTag_title)
-        {
-            HTMLText(&Writer, Str8Lit("HTML Builder"));
-        }
+        i32 * VeryDangerousPointer = 0x0;
+        *VeryDangerousPointer = 1;
     }
 
-    HTMLTag(&Writer, HTMLTag_body)
-    {
-        HTMLTag(&Writer, HTMLTag_p)
-        {
-            HTMLStyle(&Writer, HTMLStyle_color, Str8Lit("green"));
-            HTMLText(&Writer, Str8Lit("This is a red paragraph."));
-        }
-
-        HTMLTagKey(&Writer, HTMLTag_script, 7)
-        {
-            HTMLAttr(&Writer, HTMLAttr_type, Str8Lit("text/javascript"));
-            HTMLAttr(&Writer, HTMLAttr_src, Str8Lit("script.js"));
-            HTMLTextCStr(&Writer, "var test;");
-        }
-    }
-
-    StdOutputFmt("\r\n");
-    for (html_diff * Diff = Writer.Diffs; Diff; Diff = Diff->Next)
-    {
-        StdOutputFmt("Old: %{str8}, New: %{str8}\r\n",
-            Diff->Old ? Diff->Old->Type->Name : Str8Lit("NULL"),
-            Diff->New ? Diff->New->Type->Name : Str8Lit("NULL"));
-    }
-
-    return Str8FromHTMLDiff(Arena, Writer.Diffs);
+    HTMLFulfillRequest(Server, Ctx, Request);
 }
 
 /*
@@ -221,6 +355,7 @@ void InitAssetPages(memory_arena * Arena)
 void EntryHook()
 {
 	SocketInit();
+    ManagedHTMLSessionsInit();
 
     memory_arena * AssetArena = ArenaCreate(Megabytes(64));
     InitAssetPages(AssetArena);
@@ -235,16 +370,14 @@ void EntryHook()
 		web_request * Request = 0;
 		while (Request = ServerNextRequest(&Server))
 		{
-            web_connection_slot * ConnectionSlot = &Server.Connections[Request->ConnectionIndex];
-
-            if (ConnectionSlot->Value.ProtocolType == WebProtocol_WebSocket)
-            {
-                StdOutputFmt("Got a websocket request\n");
-                Request->ResponseBehavior = ResponseBehavior_Respond;
-                Request->ResponseCode = 1;
-                Request->ResponseBody = MainPageDiff(&Server, Server.ResponseArena);
-                continue;
-            }
+            //if (Request->ProtocolType == WebProtocol_WebSocket)
+            //{
+            //    StdOutputFmt("Got a websocket request\n");
+            //    Request->ResponseBehavior = ResponseBehavior_Respond;
+            //    Request->ResponseCode = 1;
+            //    Request->ResponseBody = MainPageDiff(&Server, Server.ResponseArena);
+            //    continue;
+            //}
 
             asset * Asset = HashTableGet(AssetHashTable, Request->RequestPath);
             if (Asset)
@@ -258,18 +391,8 @@ void EntryHook()
             else if (Str8Match(Request->RequestPath, Str8Lit("/"), 0))
             {
                 StdOutputFmt("Got root request\n\n");
-                Request->ResponseBehavior = ResponseBehavior_Respond;
-                Request->ResponseCode = 200;
-                Request->ResponseBody = MainPage(&Server, Server.ResponseArena);
-                Request->ResponseMimeType = &MimeType_HTML;
-            }
-            else if (Str8Match(Request->RequestPath, Str8Lit("/post_test"), 0))
-            {
-                StdOutputFmt("Got a post request\n\n");
-                Request->ResponseBehavior = ResponseBehavior_Respond;
-                Request->ResponseCode = 200;
-                Request->ResponseBody = Str8Fmt(Server.ResponseArena, "%{str8} TEST", Request->RequestBody);
-                Request->ResponseMimeType = &MimeType_HTML;
+
+                MainPage(&Server, Request);
             }
             else
             {

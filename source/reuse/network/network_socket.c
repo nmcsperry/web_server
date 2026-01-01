@@ -60,7 +60,7 @@ ip_addr IPAddrFromStr8(str8 String)
 			String = Split.Second;
 
 			str8 Extra = { 0 };
-			Segments[I] = IntFromStr8(Split.First, &Extra);
+			Segments[I] = I32FromStr8(Split.First, &Extra);
 			if (Extra.Count) { return IPAddrGetInvalid(); }
 		}
 
@@ -90,7 +90,7 @@ ip_addr IPAddrFromStr8(str8 String)
 			Parts.First = Split.Second;
 
 			str8 Extra = { 0 };
-			Segments[FirstPartCursor] = IntFromHexStr8(Split.First, &Extra);
+			Segments[FirstPartCursor] = I32FromHexStr8(Split.First, &Extra);
 			if (Extra.Count)
 			{
 				return IPAddrGetInvalid();
@@ -118,7 +118,7 @@ ip_addr IPAddrFromStr8(str8 String)
 				Parts.Second = Split.Second;
 
 				str8 Extra = { 0 };
-				Segments[7 - SecondPartCursor] = IntFromHexStr8(Split.First, &Extra);
+				Segments[7 - SecondPartCursor] = I32FromHexStr8(Split.First, &Extra);
 				if (Extra.Count)
 				{
 					return IPAddrGetInvalid();
