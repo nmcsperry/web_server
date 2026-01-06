@@ -161,9 +161,6 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 Las
         Writer.DiffRoot = DiffRoot;
         Writer.DiffTagStack[0] = DiffRoot;
 
-        Root->DiffNode = DiffRoot;
-        DiffRoot->DiffNode = &DiffComplete; // todo: is this a good way to do this?
-
         // todo: maybe we should check if they are the same type, although we can assume they are...
     }
 
@@ -387,47 +384,65 @@ void HTMLDiffPushNode(html_writer * Writer, html_node * Node)
     return Writer->DiffTagStack[Writer->StackIndex];
 }
 
+html_node * HTMLDiffGetOffset(html_writer * Writer, i32 Offset)
+{
+    i32 Cursor = Offset - 1;
+    html_node * CurrentNode;    
+    do
+    {
+        Cursor++;
+        CurrentNode = Writer->TagStack[Writer->StackIndex - Cursor];
+    } while (CurrentNode->Key);
+
+    html_node * DiffNode = Writer->DiffTagStack[Writer->StackIndex - Cursor];
+    Cursor--;
+    while (Cursor > 0)
+    {
+        u64 Key = Writer->TagStack[Writer->StackIndex - Cursor]->Key;
+        DiffNode = HTMLDiffFindKey(DiffNode, Key);
+        Cursor--;
+    }
+
+    return DiffNode;
+}
+
 void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent)
 {
     if (Writer->DiffRoot)
     {
-        html_node * CompareNode = 0;
+        html_node * ParentDiffNode = HTMLDiffGetOffset(Writer, 1);
+        html_node * DiffNode = 0;
 
         if (Node->Key)
         {
-            CompareNode = HTMLDiffFindKey(Parent->DiffNode, Node->Key);
+            DiffNode = HTMLDiffFindKey(ParentDiffNode, Node->Key);
+            DiffNode->Key = HtmlUsedKey;
         }
         else
         {
             if (Writer->DiffTagStack[Writer->StackIndex] == 0)
             {
-                HTMLDiffPushNode(Writer, Parent->DiffNode ? Parent->DiffNode->Children : 0);
+                HTMLDiffPushNode(Writer, ParentDiffNode ? ParentDiffNode->Children : 0);
             }
-
-            CompareNode = Writer->DiffTagStack[Writer->StackIndex];
+            DiffNode = Writer->DiffTagStack[Writer->StackIndex];
         }
 
-        if (CompareNode == &DiffTerminator || CompareNode == 0)
+        if (DiffNode == &DiffTerminator || DiffNode == 0)
         {
             HTMLDiffInsert(Writer, Parent, Node);
         }
-        else if (CompareNode->Type != Node->Type)
+        else if (DiffNode->Type != Node->Type)
         {
-            HTMLDiffReplace(Writer, CompareNode, Node);
+            HTMLDiffReplace(Writer, DiffNode, Node);
             Writer->Replacing = Writer->StackIndex;
-
-            CompareNode->DiffNode = &DiffComplete;
         }
         else
         {
-            Node->Id = CompareNode->Id;
+            Node->Id = DiffNode->Id;
 
-            Node->DiffNode = CompareNode;
-            CompareNode->DiffNode = &DiffComplete; // todo: is this a good way to do this?
-
-            if (Node->Key && Node->Index != CompareNode->DiffNode)
+            if (Node->Key && Node->Index != DiffNode->Index)
             {
-                HTMLDiffMove(Writer, Node, CompareNode);
+                HTMLDiffMove(Writer, Node, DiffNode);
             }
         }
     }
@@ -438,23 +453,33 @@ void HTMLDiffOnEndNode(html_writer * Writer)
     if (Writer->DiffRoot)
     {
         html_node * Tag = Writer->TagStack[Writer->StackIndex];
-        html_node * DiffTag = Tag->DiffNode;
+        html_node * DiffTag = HTMLDiffGetOffset(Writer, 0);
 
         if (DiffTag != 0 && DiffTag != &DiffTerminator && Tag->Type == DiffTag->Type)
         {
-            // delete any unmatched children
-            for (html_node * Child = DiffTag->Children; Child; Child = Child->Next)
-            {
-                if (Child->DiffNode != &DiffComplete)
-                {
-                    HTMLDiffDelete(Writer, Child);
-                }
-            }
-
             // compare content
             if (!Str8Match(Tag->Content, DiffTag->Content, 0))
             {
                 HTMLDiffReplaceContent(Writer, DiffTag, Tag);
+            }
+
+            // delete any children from the old tag that are not on the new one
+            html_node * DiffChild = DiffTag->Children;
+            html_node * DiffChildEnd = Writer->DiffTagStack[Writer->StackIndex + 1];
+
+            for (DiffChild; DiffChild && DiffChild != DiffChildEnd; DiffChild = DiffChild->Next)
+            {
+                if (DiffChild->Key == HtmlUsedKey)
+                {
+                    HTMLDiffDelete(Writer, DiffChild);
+                }
+            }
+            for (DiffChild; DiffChild; DiffChild = DiffChild->Next)
+            {
+                if (!DiffChild->Key || DiffChild->Key != HtmlUsedKey)
+                {
+                    HTMLDiffDelete(Writer, DiffChild);
+                }
             }
 
             // compare unordered items
@@ -497,13 +522,8 @@ void HTMLDiffOnEndNode(html_writer * Writer)
         HTMLDiffPushNode(Writer,
             Writer->DiffTagStack[Writer->StackIndex] ? Writer->DiffTagStack[Writer->StackIndex]->Next : 0);
 
-        for (i32 I = Writer->StackIndex + 1; I < HtmlMaxTagDepth; I++)
-        {
-            if (Writer->DiffTagStack[I] != 0)
-            {
-                Writer->DiffTagStack[I] = 0;
-            }
-        }
+        html_node * LastChild = Writer->DiffTagStack[Writer->StackIndex - 1];
+        Writer->DiffTagStack[Writer->StackIndex + 1] = 0;
     }
 }
 

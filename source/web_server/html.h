@@ -71,13 +71,13 @@ struct html_node {
 
     // todo: this isn't strictly needed, it might be a good idea to delete this and then possibly add it again
     // just to make sure everything is consistent
-    html_node * DiffNode;
+    // html_node * DiffNode;
 };
 
 #define HtmlMaxTagDepth 16
+#define HtmlUsedKey 0xffffffffffffffff
 
 html_node DiffTerminator;
-html_node DiffComplete;
 
 typedef struct html_diff html_diff;
 
