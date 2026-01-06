@@ -281,19 +281,19 @@ void MainPage(web_server * Server, web_request * Request)
 
         HTMLTag(&Ctx.Writer, HTMLTag_body)
         {
-            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_span, "%{i32}", GlobalCounter);
+            HTMLTag(&Ctx.Writer, HTMLTag_img)
+            {
+                HTMLAttr(&Ctx.Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
+            }
+
+            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_div, "%{i32}", GlobalCounter);
 
             if (HTMLButton(&Ctx, Str8Lit("Increment!")))
             {
                 GlobalCounter++;
             }
 
-            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_span, "%{i32}", GlobalCounter);
-
-            HTMLTag(&Ctx.Writer, HTMLTag_img)
-            {
-                HTMLAttr(&Ctx.Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
-            }
+            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_div, "%{i32}", GlobalCounter);
 
             HTMLTag(&Ctx.Writer, HTMLTag_p)
             {

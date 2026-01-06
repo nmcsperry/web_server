@@ -72,10 +72,10 @@ struct html_node {
     // todo: this isn't strictly needed, it might be a good idea to delete this and then possibly add it again
     // just to make sure everything is consistent
     // html_node * DiffNode;
+    u32 UsedInDiff;
 };
 
 #define HtmlMaxTagDepth 16
-#define HtmlUsedKey 0xffffffffffffffff
 
 html_node DiffTerminator;
 
@@ -121,6 +121,7 @@ typedef struct html_writer
     html_node * DiffTagStack[HtmlMaxTagDepth];
     html_diff * Diffs;
     html_diff * DiffsEnd;
+    u32 DiffVersion; // todo: this is weird and bad
 
     u32 LastId;
     u32 Replacing;

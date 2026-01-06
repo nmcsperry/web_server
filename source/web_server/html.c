@@ -176,6 +176,7 @@ void HTMLWriterReset(html_writer * Writer, u32 LastId)
     // Writer->DiffRoot = Writer->DiffRoot;
     Writer->Diffs = 0;
     Writer->DiffsEnd = 0;
+    Writer->DiffVersion++;
 
     Writer->LastId = LastId;
     Writer->Replacing = false;
@@ -189,6 +190,7 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 Las
     html_writer Writer = { 0 };
     Writer.Arena = Arena;
     Writer.DiffRoot = DiffRoot;
+    Writer.DiffVersion = 1;
 
     HTMLWriterInit(&Writer);
 
@@ -446,7 +448,7 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
             DiffNode = HTMLDiffFindKey(ParentDiffNode, Node->Key);
             if (DiffNode)
             {
-                DiffNode->Key = HtmlUsedKey;
+                DiffNode->UsedInDiff = Writer->DiffVersion;
             }
         }
         else
@@ -500,14 +502,14 @@ void HTMLDiffOnEndNode(html_writer * Writer)
 
             for (DiffChild; DiffChild && DiffChild != DiffChildEnd; DiffChild = DiffChild->Next)
             {
-                if (DiffChild->Key == HtmlUsedKey)
+                if (DiffChild->Key && DiffChild->UsedInDiff != Writer->DiffVersion)
                 {
                     HTMLDiffDelete(Writer, DiffChild);
                 }
             }
             for (DiffChild; DiffChild; DiffChild = DiffChild->Next)
             {
-                if (!DiffChild->Key || DiffChild->Key != HtmlUsedKey)
+                if (!DiffChild->Key || DiffChild->UsedInDiff != Writer->DiffVersion)
                 {
                     HTMLDiffDelete(Writer, DiffChild);
                 }
