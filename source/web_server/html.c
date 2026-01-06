@@ -145,24 +145,52 @@ str8 Str8FromHTMLDiff(memory_arena * Arena, html_diff * Deltas)
     return ScratchBufferEndStr8(Buffer, Arena);
 }
 
+void HTMLWriterInit(html_writer * Writer)
+{
+    html_node * Root = ArenaPushZero(Writer->Arena, html_node);
+    Root->Type = HTMLTag_html;
+
+    Writer->DocumentRoot = Root;
+    Writer->TagStack[0] = Root;
+
+    if (Writer->DiffRoot)
+    {
+        Writer->DiffTagStack[0] = Writer->DiffRoot;
+    }
+}
+
+// todo: we should try to move away from this, and just have the writer be smarter somehow...
+void HTMLWriterReset(html_writer * Writer, u32 LastId)
+{
+    // Writer->Arena = Writer->Arena;
+    Writer->DocumentRoot = 0;
+    Writer->StackIndex = 0;
+    for (i32 I = 0; I < HtmlMaxTagDepth; I++)
+    {
+        Writer->TagStack[I] = 0;
+        Writer->DiffTagStack[I] = 0;
+    }
+
+    HTMLWriterInit(Writer);
+
+    // Writer->DiffRoot = Writer->DiffRoot;
+    Writer->Diffs = 0;
+    Writer->DiffsEnd = 0;
+
+    Writer->LastId = LastId;
+    Writer->Replacing = false;
+
+    Writer->Error = 0;
+    Writer->ErrorMessage = Str8Empty();
+}
+
 html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 LastId)
 {
     html_writer Writer = { 0 };
     Writer.Arena = Arena;
+    Writer.DiffRoot = DiffRoot;
 
-	html_node * Root = ArenaPushZero(Arena, html_node);
-	Root->Type = HTMLTag_html;
-	
-    Writer.DocumentRoot = Root;
-    Writer.TagStack[0] = Root;
-
-    if (DiffRoot)
-    {
-        Writer.DiffRoot = DiffRoot;
-        Writer.DiffTagStack[0] = DiffRoot;
-
-        // todo: maybe we should check if they are the same type, although we can assume they are...
-    }
+    HTMLWriterInit(&Writer);
 
     Writer.LastId = LastId;
 
@@ -416,7 +444,10 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
         if (Node->Key)
         {
             DiffNode = HTMLDiffFindKey(ParentDiffNode, Node->Key);
-            DiffNode->Key = HtmlUsedKey;
+            if (DiffNode)
+            {
+                DiffNode->Key = HtmlUsedKey;
+            }
         }
         else
         {

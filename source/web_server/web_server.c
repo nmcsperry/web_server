@@ -45,6 +45,9 @@ typedef struct html_context
     bool32 Valid;
     html_writer Writer;
     managed_html_session * Session;
+    i32 ClientId;
+    u32 PassCount;
+    u32 PassCountMax;
 } html_context;
 
 void ManagedHTMLSessionsInit()
@@ -55,6 +58,13 @@ void ManagedHTMLSessionsInit()
         GlobalSessionPool.Arenas[I] = ArenaCreateAdv(Kilobytes(4), 0, 0);
     }
 }
+
+#define _ignore_html_context
+#define ManagedHTMLSession(ContextDeclaration, Server, Request) \
+    for ( \
+        ContextDeclaration = HTMLStartManaged(Server, Request); \
+        _ignore_ ## ContextDeclaration.PassCount > _ignore_ ## ContextDeclaration.PassCountMax; \
+        HTMLFulfillRequest(Server, & _ignore_ ## ContextDeclaration, Request))
 
 managed_html_session * CreateManagedHTMLSession()
 {
@@ -132,7 +142,9 @@ html_context HTMLStartManaged(web_server * Server, web_request * Request)
         return (html_context) {
             .Valid = true,
             .Writer = HTMLWriterCreate(Arena, 0, 0),
-            .Session = Session
+            .Session = Session,
+            .PassCount = 0,
+            .PassCountMax = 0
         };
     }
     else
@@ -140,7 +152,10 @@ html_context HTMLStartManaged(web_server * Server, web_request * Request)
         return (html_context) {
             .Valid = true,
             .Writer = HTMLWriterCreate(Arena, Session->LastDocument, Session->LastDocumentId),
-            .Session = Session
+            .Session = Session,
+            .ClientId = I32FromStr8(Request->RequestBody, 0),
+            .PassCount = 0,
+            .PassCountMax = 1
         };
     }
 }
@@ -154,9 +169,9 @@ html_context HTMLStartPlain(web_server * Server, web_request * Request)
     };
 }
 
-void HTMLFulfillRequest(web_server * Server, html_context Context, web_request * Request)
+void HTMLFulfillRequest(web_server * Server, html_context * Context, web_request * Request)
 {
-    if (!Context.Valid)
+    if (!Context->Valid)
     {
         Request->ResponseBehavior = ResponseBehavior_Respond;
         Request->ResponseCode = 500;
@@ -166,41 +181,50 @@ void HTMLFulfillRequest(web_server * Server, html_context Context, web_request *
         return;
     }
 
-    if (Context.Session)
+    Context->PassCount++;
+
+    if (Context->Session)
     {
-        if (Context.Session->Messages == 0)
+        if (Context->Session->Messages == 0)
         {
             Request->ResponseBehavior = ResponseBehavior_Respond;
             Request->ResponseCode = 200;
             Request->ResponseMimeType = &MimeType_HTML;
-            Request->ResponseBody = Str8FromHTML(Server->ResponseArena, Context.Writer.DocumentRoot);
-            Request->ResponseSessionCookie = Context.Session->SessionId;
+            Request->ResponseBody = Str8FromHTML(Server->ResponseArena, Context->Writer.DocumentRoot);
+            Request->ResponseSessionCookie = Context->Session->SessionId;
         }
         else
         {
+            if (Context->PassCount == 1)
+            {
+                Context->ClientId = 0;
+                HTMLWriterReset(&Context->Writer, Context->Session->LastDocumentId);
+                return;
+            }
+
             Request->ResponseBehavior = ResponseBehavior_Respond;
             Request->ResponseCode = 1;
-            Request->ResponseBody = Str8FromHTMLDiff(Server->ResponseArena, Context.Writer.Diffs);
+            Request->ResponseBody = Str8FromHTMLDiff(Server->ResponseArena, Context->Writer.Diffs);
 
-            ArenaReset(GlobalSessionPool.Arenas[Context.Session->LastArenaIndex]);
-            GlobalSessionPool.ArenaOccupancy[Context.Session->LastArenaIndex] = false;
+            ArenaReset(GlobalSessionPool.Arenas[Context->Session->LastArenaIndex]);
+            GlobalSessionPool.ArenaOccupancy[Context->Session->LastArenaIndex] = false;
         }
 
-        Context.Session->Messages++;
-        Context.Session->LastCommunication = UnixTimeSec();
+        Context->Session->Messages++;
+        Context->Session->LastCommunication = UnixTimeSec();
 
-        Context.Session->LastArenaIndex = Context.Session->CurrentArenaIndex;
-        Context.Session->CurrentArenaIndex = -1;
+        Context->Session->LastArenaIndex = Context->Session->CurrentArenaIndex;
+        Context->Session->CurrentArenaIndex = -1;
 
-        Context.Session->LastDocument = Context.Writer.DocumentRoot;
-        Context.Session->LastDocumentId = Context.Writer.LastId;
+        Context->Session->LastDocument = Context->Writer.DocumentRoot;
+        Context->Session->LastDocumentId = Context->Writer.LastId;
     }
     else
     {
         Request->ResponseBehavior = ResponseBehavior_Respond;
         Request->ResponseCode = 200;
         Request->ResponseMimeType = &MimeType_HTML;
-        Request->ResponseBody = Str8FromHTML(Server->ResponseArena, Context.Writer.DocumentRoot);
+        Request->ResponseBody = Str8FromHTML(Server->ResponseArena, Context->Writer.DocumentRoot);
     }
 }
 
@@ -224,24 +248,19 @@ str8 NotFoundPage(web_server * Server, memory_arena * Arena)
     return Str8FromHTML(Arena, Writer.DocumentRoot);
 }
 
-bool32 HTMLElementWasClicked(web_request * Request, html_writer * Writer)
+bool32 HTMLElementWasClicked(html_context * Context)
 {
-    if (Request->ProtocolType == WebProtocol_HTTP)
-    {
-        return false;
-    }
-    i32 ClientID = I32FromStr8(Request->RequestBody, 0);
-    return ClientID == Writer->TagStack[Writer->StackIndex]->Id;
+    return Context->ClientId == Context->Writer.TagStack[Context->Writer.StackIndex]->Id;
 }
 
-bool32 HTMLButton(web_request * Request, html_writer * Writer, str8 Text)
+bool32 HTMLButton(html_context * Context, str8 Text)
 {
     bool32 Result;
-    HTMLTag(Writer, HTMLTag_button)
+    HTMLTag(&Context->Writer, HTMLTag_button)
     {
-        HTMLAttr(Writer, HTMLAttr_onclick, Str8Lit("Interact(this)"));
-        HTMLText(Writer, Text);
-        Result = HTMLElementWasClicked(Request, Writer);
+        HTMLAttr(&Context->Writer, HTMLAttr_onclick, Str8Lit("Interact(this)"));
+        HTMLText(&Context->Writer, Text);
+        Result = HTMLElementWasClicked(Context);
     }
     return Result;
 }
@@ -250,9 +269,7 @@ i32 GlobalCounter = 0;
 
 void MainPage(web_server * Server, web_request * Request)
 {
-    html_context Ctx = HTMLStartManaged(Server, Request);
-
-    if (Ctx.Valid)
+    for (html_context Ctx = HTMLStartManaged(Server, Request); Ctx.PassCount <= Ctx.PassCountMax; HTMLFulfillRequest(Server, &Ctx, Request))
     {
         HTMLTag(&Ctx.Writer, HTMLTag_head)
         {
@@ -264,7 +281,9 @@ void MainPage(web_server * Server, web_request * Request)
 
         HTMLTag(&Ctx.Writer, HTMLTag_body)
         {
-            if (HTMLButton(Request, &Ctx.Writer, Str8Lit("Increment!")))
+            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_span, "%{i32}", GlobalCounter);
+
+            if (HTMLButton(&Ctx, Str8Lit("Increment!")))
             {
                 GlobalCounter++;
             }
@@ -293,13 +312,6 @@ void MainPage(web_server * Server, web_request * Request)
             }
         }
     }
-    else
-    {
-        i32 * VeryDangerousPointer = 0x0;
-        *VeryDangerousPointer = 1;
-    }
-
-    HTMLFulfillRequest(Server, Ctx, Request);
 }
 
 /*
