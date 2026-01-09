@@ -179,4 +179,6 @@ str8 HTTPReasonName(u16 Reason);
 
 str8 WebsocketReasonName(u16 Reason);
 
+u64 ServerNextWebsocketSessionClosing(web_server * Server, u64 Last);
+
 #endif

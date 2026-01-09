@@ -83,11 +83,28 @@ managed_html_session * CreateManagedHTMLSession()
 
             Session->FirstCommunication = UnixTimeSec();
 
+            StdOutputFmt("\tWe are creating a session with ID %{hex64}.\n", Session->SessionId);
+
             return Session;
         }
     }
 
     return 0;
+}
+
+void DeleteManagedHTMLSession(managed_html_session * Session)
+{
+    u64 SessionId = Session->SessionId;
+
+    if (Session->LastArenaIndex > -1)
+    {
+        ArenaReset(GlobalSessionPool.Arenas[Session->LastArenaIndex]);
+        GlobalSessionPool.ArenaOccupancy[Session->LastArenaIndex] = 0;
+    }
+
+    *Session = (managed_html_session) { 0 };
+
+    StdOutputFmt("\tWebsocket with Session ID %{hex64} is closing... deleting that session.\n", SessionId);
 }
 
 managed_html_session * FindManagedHTMLSession(u64 SessionId)
@@ -389,7 +406,6 @@ void EntryHook()
             asset * Asset = HashTableGet(AssetHashTable, Request->RequestPath);
             if (Asset)
             {
-                StdOutputFmt("Got an asset request\n\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 200;
                 Request->ResponseMimeType = Asset->MimeType;
@@ -397,18 +413,40 @@ void EntryHook()
             }
             else if (Str8Match(Request->RequestPath, Str8Lit("/"), 0))
             {
-                StdOutputFmt("Got root request\n\n");
-
                 MainPage(&Server, Request);
             }
             else
             {
-                StdOutputFmt("Unknown request, responding with 404\n\n");
                 Request->ResponseBehavior = ResponseBehavior_Respond;
                 Request->ResponseCode = 404;
                 Request->ResponseBody = NotFoundPage(&Server, Server.ResponseArena);
                 Request->ResponseMimeType = &MimeType_HTML;
             }
 		}
+
+        u64 ClosingSession = 0;
+        while (ClosingSession = ServerNextWebsocketSessionClosing(&Server, ClosingSession))
+        {
+            managed_html_session * Session = FindManagedHTMLSession(ClosingSession);
+            if (Session)
+            {
+                DeleteManagedHTMLSession(Session);
+            }
+        }
+
+        u64 CurrentTime = UnixTimeSec();
+        for (i32 I = 0; I < ManagedHTMLSessionCount; I++)
+        {
+            managed_html_session * Session = &GlobalSessionPool.Sessions[I];
+            if (!Session->Valid)
+            {
+                continue;
+            }
+
+            if (Session->Messages == 1 && CurrentTime - Session->LastCommunication > 2)
+            {
+                DeleteManagedHTMLSession(Session);
+            }
+        }
 	}
 }

@@ -1,5 +1,10 @@
 const Socket = new WebSocket("ws://localhost");
 
+Socket.onopen = function ()
+{
+    Socket.send(0);
+}
+
 Socket.onmessage = function(Event)
 {
     const Deltas = JSON.parse(Event.data);

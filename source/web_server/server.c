@@ -133,6 +133,8 @@ void ServerLoop(web_server * Server)
 			{
 				if (CommunicationElapsed >= WEBSOCKET_CONNECTION_TIMEOUT)
 				{
+					StdOutputFmt("We are going to timeout this connection: Index %{i32}, Session ID %{hex64}\n", ConnectionIndex, Connection->Value.WebSocketSessionCookie);
+
 					web_request_slot * CloseRequestSlot = AddRequest(Server, Connection, true);
 					web_request * CloseRequest = &CloseRequestSlot->Value;
 					CloseRequest->Status = WebRequest_Processed;
@@ -246,6 +248,8 @@ void ServerLoop(web_server * Server)
 		else if (Request->Status == WebRequest_Ready && Connection->ProtocolType == WebProtocol_WebSocket
 			&& Request->RequestHTTPMethod == WebSocket_Close)
 		{
+			StdOutputFmt("This connection is closing: Index %{i32}, Session ID %{hex64}\n", Request->ConnectionIndex, Request->RequestSessionCookie);
+
 			Request->Status = WebRequest_Processed;
 			Request->ResponseCode = WebSocket_Close;
 			Request->ResponseBehavior = ResponseBehavior_RespondClose;
@@ -498,8 +502,10 @@ web_connection_slot * AddConnection(web_server * Server, socket_handle Socket, i
 
 bool8 CloseConnection(web_server * Server, web_connection_slot * Connection)
 {
-	StdOutputFmt("Closing something...\n\n");
-
+	if (Connection->Value.ProtocolType == WebProtocol_WebSocket)
+	{
+		StdOutputFmt("This connection is closing for real: Session ID %{hex64}\n", Connection->Value.WebSocketSessionCookie);
+	}
 	SocketClose(Connection->Value.Socket);
 	SocketPollingRemove(Server->Polling, Connection->Index);
 
@@ -830,6 +836,29 @@ web_request * ServerNextRequest(web_server * Server)
 			{
 				Request->Value.ResponseBehavior = ResponseBehavior_Close;
 			}
+		}
+	}
+
+	return 0;
+}
+
+u64 ServerNextWebsocketSessionClosing(web_server * Server, u64 Last)
+{
+	bool32 FoundLast = !Last;
+	for (i32 I = 0; I < WEB_REQUEST_COUNT; I++)
+	{
+		web_request_slot * Request = &Server->Requests[I];
+
+		if (FoundLast && Request->Value.Status == WebRequest_Processed &&
+			Request->Value.ProtocolType == WebProtocol_WebSocket &&
+			((Request->Value.ResponseBehavior & ResponseBehavior_Close) || (Request->Value.ResponseBehavior & ResponseBehavior_Ignore)))
+		{
+			return Request->Value.RequestSessionCookie;
+		}
+
+		if (Request->Value.RequestSessionCookie == Last)
+		{
+			FoundLast = true;
 		}
 	}
 
