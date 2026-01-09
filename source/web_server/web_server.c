@@ -250,7 +250,8 @@ str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 
 bool32 HTMLElementWasClicked(html_context * Context)
 {
-    return Context->ClientId == Context->Writer.TagStack[Context->Writer.StackIndex]->Id;
+    html_node_ref Element = Context->Writer.TagStack[Context->Writer.StackIndex];
+    return Element.Id && Context->ClientId == Element.Id;
 }
 
 bool32 HTMLButton(html_context * Context, str8 Text)
@@ -286,15 +287,17 @@ void MainPage(web_server * Server, web_request * Request)
                 HTMLAttr(&Ctx.Writer, HTMLAttr_src, Str8Lit("/my_image.png"));
             }
 
-            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_div, "%{i32}", GlobalCounter);
-
-            if (HTMLButton(&Ctx, Str8Lit("Increment!")))
+            HTMLTag(&Ctx.Writer, HTMLTag_p)
             {
-                GlobalCounter++;
+                HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_span, "%{i32} ", GlobalCounter);
+
+                if (HTMLButton(&Ctx, Str8Lit("Increment!")))
+                {
+                    GlobalCounter++;
+                }
+
+                HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_span, " %{i32}", GlobalCounter);
             }
-
-            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_div, "%{i32}", GlobalCounter);
-
             HTMLTag(&Ctx.Writer, HTMLTag_p)
             {
                 HTMLTag(&Ctx.Writer, HTMLTag_span)
@@ -383,15 +386,6 @@ void EntryHook()
 		web_request * Request = 0;
 		while (Request = ServerNextRequest(&Server))
 		{
-            //if (Request->ProtocolType == WebProtocol_WebSocket)
-            //{
-            //    StdOutputFmt("Got a websocket request\n");
-            //    Request->ResponseBehavior = ResponseBehavior_Respond;
-            //    Request->ResponseCode = 1;
-            //    Request->ResponseBody = MainPageDiff(&Server, Server.ResponseArena);
-            //    continue;
-            //}
-
             asset * Asset = HashTableGet(AssetHashTable, Request->RequestPath);
             if (Asset)
             {

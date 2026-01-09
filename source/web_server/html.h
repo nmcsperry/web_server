@@ -56,11 +56,13 @@ HTMLStyleDef(color, color);
 typedef struct html_node html_node;
 
 struct html_node {
-    u64 Key;
     u32 Id;
     u32 Index;
-
+    u64 Key;
     html_node_type * Type;
+
+	// u64 NaturalId; this is like the id we *would* have assigned based on position in the html tree
+    // we can send this to the client so it can refer to nodes after a fresh rerender
 
     str8 Content;
     u32 ChildCount;
@@ -69,15 +71,13 @@ struct html_node {
     html_node * Children;
     html_node * Next;
 
-    // todo: this isn't strictly needed, it might be a good idea to delete this and then possibly add it again
-    // just to make sure everything is consistent
-    // html_node * DiffNode;
     u32 UsedInDiff;
 };
 
 #define HtmlMaxTagDepth 16
 
-html_node DiffTerminator;
+html_node HTMLDiffTerminator;
+html_node HTMLMemorylessPlaceholder;
 
 typedef struct html_diff html_diff;
 
@@ -109,12 +109,23 @@ struct html_diff {
     html_diff * Next;
 };
 
+typedef struct html_node_ref {
+    u32 Id;
+    // u32 Index;
+    u64 Key;
+    html_node_type * Type;
+
+    html_node * Node;
+} html_node_ref;
+
 typedef struct html_writer
 {
 	memory_arena * Arena;
     html_node * DocumentRoot;
 
-    html_node * TagStack[HtmlMaxTagDepth];
+    bool32 Memoryless;
+
+    html_node_ref TagStack[HtmlMaxTagDepth];
     u32 StackIndex;
 
     html_node * DiffRoot;
@@ -147,7 +158,7 @@ html_node * HTMLStyle(html_writer * Writer, html_node_type * Style, str8 Value);
 #define HTMLTag(Writer, Type) DeferLoop(HTMLStartTag(Writer, Type), HTMLEndTag(Writer))
 #define HTMLTagKey(Writer, Type, Key) DeferLoop(HTMLStartTagKey(Writer, Type, Key), HTMLEndTag(Writer))
 
-void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent);
+void HTMLDiffOnStartNode(html_writer * Writer, html_node_ref * Node, html_node_ref * Parent);
 void HTMLDiffOnEndNode(html_writer * Writer);
 
 html_diff * HTMLDiffAttrSet(html_writer * Writer, html_node * Parent, html_node * NewTag);

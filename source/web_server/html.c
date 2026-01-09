@@ -145,13 +145,24 @@ str8 Str8FromHTMLDiff(memory_arena * Arena, html_diff * Deltas)
     return ScratchBufferEndStr8(Buffer, Arena);
 }
 
+html_node_ref HTMLNodeRefFromNode(html_node * Node)
+{
+    return (html_node_ref)
+    {
+		.Node = Node,
+        .Key = Node->Key,
+        .Id = Node->Id, // (id should not actually be populated at this point)
+        .Type = Node->Type
+	};
+}
+
 void HTMLWriterInit(html_writer * Writer)
 {
     html_node * Root = ArenaPushZero(Writer->Arena, html_node);
     Root->Type = HTMLTag_html;
 
     Writer->DocumentRoot = Root;
-    Writer->TagStack[0] = Root;
+    Writer->TagStack[0] = HTMLNodeRefFromNode(Root);
 
     if (Writer->DiffRoot)
     {
@@ -167,7 +178,7 @@ void HTMLWriterReset(html_writer * Writer, u32 LastId)
     Writer->StackIndex = 0;
     for (i32 I = 0; I < HtmlMaxTagDepth; I++)
     {
-        Writer->TagStack[I] = 0;
+        Writer->TagStack[I] = (html_node_ref) { 0 };
         Writer->DiffTagStack[I] = 0;
     }
 
@@ -196,47 +207,63 @@ html_writer HTMLWriterCreate(memory_arena * Arena, html_node * DiffRoot, u32 Las
 
     Writer.LastId = LastId;
 
-    DiffTerminator.Children = &DiffTerminator;
+    HTMLDiffTerminator.Children = &HTMLDiffTerminator;
 
 	return Writer;
 }
 
-void HTMLAppendTagOrdered(html_writer * Writer, html_node * Child)
+void HTMLAppendTagOrdered(html_writer * Writer, html_node_ref Child)
 {
-    html_node * Parent = Writer->TagStack[Writer->StackIndex];
-    Child->Next = 0;
+    html_node_ref * ParentRef = &Writer->TagStack[Writer->StackIndex];
+    html_node * LastChild = ParentRef->Node->Children;
 
-    html_node * LastChild = Parent->Children;
     while (LastChild && LastChild->Next)
     {
 		LastChild = LastChild->Next;
     }
 
-    if (LastChild)
+    if (ParentRef->Node != &HTMLMemorylessPlaceholder)
     {
-        LastChild->Next = Child;
-    }
-    else
-    {
-		Parent->Children = Child;
-    }
+        html_node * ParentNode = ParentRef->Node;
+        html_node * ChildNode = Child.Node;
 
-    Child->Index = Parent->ChildCount++;
+        if (LastChild)
+        {
+            LastChild->Next = ChildNode;
+        }
+        else
+        {
+            ParentNode->Children = ChildNode;
+        }
+
+        ChildNode->Index = ParentNode->ChildCount++; // todo: store something on the writer, so can put the index on the html_node_ref
+        ChildNode->Next = 0;
+    }
 
     Writer->StackIndex++;
     Writer->TagStack[Writer->StackIndex] = Child;
+    html_node_ref * ChildPtr = &Writer->TagStack[Writer->StackIndex]; // todo: redo this
 
-    HTMLDiffOnStartNode(Writer, Child, Parent);
+    HTMLDiffOnStartNode(Writer, ChildPtr, ParentRef);
 
-    if (Child->Id == 0)
+    if (ChildPtr->Id == 0)
     {
-        Child->Id = ++Writer->LastId;
+        ChildPtr->Id = ++Writer->LastId;
+        if (ChildPtr->Node != &HTMLMemorylessPlaceholder)
+        {
+            ChildPtr->Node->Id = ChildPtr->Id;
+        }
     }
 }
 
 void HTMLAppendTagUnordered(html_writer * Writer, html_node * Child)
 {
-    html_node * Parent = Writer->TagStack[Writer->StackIndex];
+    if (Writer->Memoryless)
+    {
+        return;
+    }
+
+    html_node * Parent = Writer->TagStack[Writer->StackIndex].Node;
 
     html_node * PrevSibling = 0;
     html_node * NextSibling = Parent->UnorderedChildren;
@@ -259,25 +286,35 @@ void HTMLAppendTagUnordered(html_writer * Writer, html_node * Child)
 
 html_node * HTMLStartTagKey(html_writer * Writer, html_node_type * Type, u64 Key)
 {
-    html_node * Node = ArenaPushZero(Writer->Arena, html_node);
-	Node->Type = Type;
-	Node->Key = Key;
+    html_node_ref Ref;
+    if (!Writer->Memoryless)
+    {
+        html_node * Node = ArenaPushZero(Writer->Arena, html_node);
+        Node->Type = Type;
+        Node->Key = Key;
 
-	HTMLAppendTagOrdered(Writer, Node);
+        Ref = HTMLNodeRefFromNode(Node);
+    }
+    else
+    {
+        Ref = (html_node_ref)
+        {
+            .Node = &HTMLMemorylessPlaceholder,
+            .Type = Type,
+            .Key = Key
+        };
+    }
 
-    return Node;
+    HTMLAppendTagOrdered(Writer, Ref);
+
+    return Ref.Node;
 }
 
 html_node * HTMLSingleTagKey(html_writer * Writer, html_node_type * Type, u64 Key)
 {
-    html_node * Node = ArenaPushZero(Writer->Arena, html_node);
-    Node->Type = Type;
-    Node->Key = Key;
-
-    HTMLAppendTagOrdered(Writer, Node);
+    html_node * Result = HTMLStartTagKey(Writer, Type, Key);
     HTMLEndTag(Writer);
-
-    return Node;
+    return Result;
 }
 
 html_node * HTMLStartTag(html_writer * Writer, html_node_type * Type)
@@ -299,7 +336,7 @@ html_node * HTMLEndTag(html_writer * Writer)
 
     HTMLDiffOnEndNode(Writer);
 
-    Writer->TagStack[Writer->StackIndex] = 0;
+    Writer->TagStack[Writer->StackIndex] = (html_node_ref) { 0 };
     Writer->StackIndex--;
 
     if (Writer->StackIndex < Writer->Replacing)
@@ -307,17 +344,23 @@ html_node * HTMLEndTag(html_writer * Writer)
         Writer->Replacing = 0;
     }
 
-	return Writer->TagStack[Writer->StackIndex];
+	return Writer->TagStack[Writer->StackIndex].Node;
 }
 
 html_node * HTMLText(html_writer * Writer, str8 Text)
 {
-    Writer->TagStack[Writer->StackIndex]->Content = Text;
+    html_node_ref Ref = Writer->TagStack[Writer->StackIndex];
+    if (Ref.Node && Ref.Node != &HTMLMemorylessPlaceholder)
+    {
+        Ref.Node->Content = Text;
+        return Ref.Node;
+    }
+    return 0;
 }
 
 html_node * HTMLTextCStr(html_writer * Writer, char * CStr)
 {
-    Writer->TagStack[Writer->StackIndex]->Content = Str8FromCStr(CStr);
+    HTMLText(Writer, Str8FromCStr(CStr));
 }
 
 html_node * HTMLSimpleTag(html_writer * Writer, html_node_type * Type, str8 String)
@@ -400,7 +443,7 @@ void HTMLDiffPushNode(html_writer * Writer, html_node * Node)
 {
     Writer->DiffTagStack[Writer->StackIndex] = Node;
     
-    if (Node == &DiffTerminator) return Node;
+    if (Node == &HTMLDiffTerminator) return Node;
 
     while (Writer->DiffTagStack[Writer->StackIndex] && Writer->DiffTagStack[Writer->StackIndex]->Key)
     {
@@ -408,7 +451,7 @@ void HTMLDiffPushNode(html_writer * Writer, html_node * Node)
     }
     if (Writer->DiffTagStack[Writer->StackIndex] == 0)
     {
-        Writer->DiffTagStack[Writer->StackIndex] = &DiffTerminator;
+        Writer->DiffTagStack[Writer->StackIndex] = &HTMLDiffTerminator;
     }
 
     return Writer->DiffTagStack[Writer->StackIndex];
@@ -417,18 +460,18 @@ void HTMLDiffPushNode(html_writer * Writer, html_node * Node)
 html_node * HTMLDiffGetOffset(html_writer * Writer, i32 Offset)
 {
     i32 Cursor = Offset - 1;
-    html_node * CurrentNode;    
+    html_node_ref CurrentNodeRef;
     do
     {
         Cursor++;
-        CurrentNode = Writer->TagStack[Writer->StackIndex - Cursor];
-    } while (CurrentNode->Key);
+        CurrentNodeRef = Writer->TagStack[Writer->StackIndex - Cursor];
+    } while (CurrentNodeRef.Key);
 
     html_node * DiffNode = Writer->DiffTagStack[Writer->StackIndex - Cursor];
     Cursor--;
     while (Cursor > 0)
     {
-        u64 Key = Writer->TagStack[Writer->StackIndex - Cursor]->Key;
+        u64 Key = Writer->TagStack[Writer->StackIndex - Cursor].Key;
         DiffNode = HTMLDiffFindKey(DiffNode, Key);
         Cursor--;
     }
@@ -436,7 +479,7 @@ html_node * HTMLDiffGetOffset(html_writer * Writer, i32 Offset)
     return DiffNode;
 }
 
-void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Parent)
+void HTMLDiffOnStartNode(html_writer * Writer, html_node_ref * Node, html_node_ref * Parent)
 {
     if (Writer->DiffRoot)
     {
@@ -460,22 +503,26 @@ void HTMLDiffOnStartNode(html_writer * Writer, html_node * Node, html_node * Par
             DiffNode = Writer->DiffTagStack[Writer->StackIndex];
         }
 
-        if (DiffNode == &DiffTerminator || DiffNode == 0)
+        if (DiffNode == &HTMLDiffTerminator || DiffNode == 0)
         {
-            HTMLDiffInsert(Writer, Parent, Node);
+            HTMLDiffInsert(Writer, Parent->Node, Node->Node);
         }
         else if (DiffNode->Type != Node->Type)
         {
-            HTMLDiffReplace(Writer, DiffNode, Node);
+            HTMLDiffReplace(Writer, DiffNode, Node->Node);
             Writer->Replacing = Writer->StackIndex;
         }
         else
         {
             Node->Id = DiffNode->Id;
-
-            if (Node->Key && Node->Index != DiffNode->Index)
+            if (Node->Node != &HTMLMemorylessPlaceholder)
             {
-                HTMLDiffMove(Writer, Node, DiffNode);
+                Node->Node->Id = Node->Id;
+            }
+
+            if (Node->Key && Node->Node->Index != DiffNode->Index)
+            {
+                HTMLDiffMove(Writer, Node->Node, DiffNode);
             }
         }
     }
@@ -485,19 +532,13 @@ void HTMLDiffOnEndNode(html_writer * Writer)
 {
     if (Writer->DiffRoot)
     {
-        html_node * Tag = Writer->TagStack[Writer->StackIndex];
-        html_node * DiffTag = HTMLDiffGetOffset(Writer, 0);
+        html_node_ref TagRef = Writer->TagStack[Writer->StackIndex];
+        html_node * DiffTagNode = HTMLDiffGetOffset(Writer, 0);
 
-        if (DiffTag != 0 && DiffTag != &DiffTerminator && Tag->Type == DiffTag->Type)
+        if (DiffTagNode != 0 && DiffTagNode != &HTMLDiffTerminator && TagRef.Type == DiffTagNode->Type)
         {
-            // compare content
-            if (!Str8Match(Tag->Content, DiffTag->Content, 0))
-            {
-                HTMLDiffReplaceContent(Writer, DiffTag, Tag);
-            }
-
             // delete any children from the old tag that are not on the new one
-            html_node * DiffChild = DiffTag->Children;
+            html_node * DiffChild = DiffTagNode->Children;
             html_node * DiffChildEnd = Writer->DiffTagStack[Writer->StackIndex + 1];
 
             for (DiffChild; DiffChild && DiffChild != DiffChildEnd; DiffChild = DiffChild->Next)
@@ -515,40 +556,51 @@ void HTMLDiffOnEndNode(html_writer * Writer)
                 }
             }
 
-            // compare unordered items
-            html_node * AttrChild = Tag->UnorderedChildren;
-            html_node * AttrDiffChild = DiffTag->UnorderedChildren;
-
-            while (AttrChild && AttrDiffChild)
+            if (TagRef.Node != &HTMLMemorylessPlaceholder)
             {
-                if (AttrChild->Type > AttrDiffChild->Type)
+                html_node * TagNode = TagRef.Node;
+
+                // compare content
+                if (!Str8Match(TagNode->Content, DiffTagNode->Content, 0))
                 {
-                    HTMLDiffAttrSet(Writer, Tag, AttrChild);
-                    AttrDiffChild = AttrDiffChild->Next;
+                    HTMLDiffReplaceContent(Writer, DiffTagNode, TagNode);
                 }
-                else if (AttrChild->Type < AttrDiffChild->Type)
+
+                // compare unordered items
+                html_node * AttrChild = TagNode->UnorderedChildren;
+                html_node * AttrDiffChild = DiffTagNode->UnorderedChildren;
+
+                while (AttrChild && AttrDiffChild)
                 {
-                    HTMLDiffAttrDelete(Writer, Tag, AttrDiffChild);
-                    AttrChild = AttrChild->Next;
-                }
-                else
-                {
-                    if (!Str8Match(AttrChild->Content, AttrDiffChild->Content, 0))
+                    if (AttrChild->Type > AttrDiffChild->Type)
                     {
-                        HTMLDiffAttrSet(Writer, Tag, AttrChild);
+                        HTMLDiffAttrSet(Writer, TagRef.Node, AttrChild);
+                        AttrDiffChild = AttrDiffChild->Next;
                     }
-                    AttrChild = AttrChild->Next;
-                    AttrDiffChild = AttrDiffChild->Next;
+                    else if (AttrChild->Type < AttrDiffChild->Type)
+                    {
+                        HTMLDiffAttrDelete(Writer, TagRef.Node, AttrDiffChild);
+                        AttrChild = AttrChild->Next;
+                    }
+                    else
+                    {
+                        if (!Str8Match(AttrChild->Content, AttrDiffChild->Content, 0))
+                        {
+                            HTMLDiffAttrSet(Writer, TagRef.Node, AttrChild);
+                        }
+                        AttrChild = AttrChild->Next;
+                        AttrDiffChild = AttrDiffChild->Next;
+                    }
                 }
-            }
 
-            if (AttrChild)
-            {
-                HTMLDiffAttrSetRest(Writer, Tag, AttrChild);
-            }
-            else if (AttrDiffChild)
-            {
-                HTMLDiffAttrDeleteRest(Writer, Tag, AttrDiffChild);
+                if (AttrChild)
+                {
+                    HTMLDiffAttrSetRest(Writer, TagRef.Node, AttrChild);
+                }
+                else if (AttrDiffChild)
+                {
+                    HTMLDiffAttrDeleteRest(Writer, TagRef.Node, AttrDiffChild);
+                }
             }
         }
 
@@ -571,6 +623,11 @@ html_diff * HTMLDiffAppend(html_writer * Writer, html_diff Diff)
 
 html_diff * HTMLDiffDelete(html_writer * Writer, html_node * OldTag)
 {
+    if (OldTag == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Delete | OldTag->Type->Class,
         .Old = OldTag
@@ -580,6 +637,11 @@ html_diff * HTMLDiffDelete(html_writer * Writer, html_node * OldTag)
 
 html_diff * HTMLDiffInsert(html_writer * Writer, html_node * Parent, html_node * NewTag)
 {
+    if (Parent == &HTMLMemorylessPlaceholder || NewTag == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Insert | NewTag->Type->Class,
         .New = NewTag,
@@ -592,6 +654,11 @@ html_diff * HTMLDiffInsert(html_writer * Writer, html_node * Parent, html_node *
 
 html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node * NewTag)
 {
+    if (OldTag == &HTMLMemorylessPlaceholder || NewTag == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Replace | NewTag->Type->Class,
         .New = NewTag,
@@ -602,6 +669,11 @@ html_diff * HTMLDiffReplace(html_writer * Writer, html_node * OldTag, html_node 
 
 html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, html_node * NewTag)
 {
+    if (OldTag == &HTMLMemorylessPlaceholder || NewTag == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_ReplaceContent | OldTag->Type->Class,
         .New = NewTag,
@@ -612,6 +684,11 @@ html_diff * HTMLDiffReplaceContent(html_writer * Writer, html_node * OldTag, htm
 
 html_diff * HTMLDiffMove(html_writer * Writer, html_node * OldTag, html_node * NewTag)
 {
+    if (OldTag == &HTMLMemorylessPlaceholder || NewTag == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = HTMLDiff_Move | NewTag->Type->Class,
         .New = NewTag,
@@ -624,6 +701,11 @@ html_diff * HTMLDiffMove(html_writer * Writer, html_node * OldTag, html_node * N
 
 html_diff * HTMLDiffAttrDelete(html_writer * Writer, html_node * Parent, html_node * OldTag)
 {
+    if (Parent == &HTMLMemorylessPlaceholder || OldTag == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = OldTag->Type->Class,
         .Old = OldTag,
@@ -634,6 +716,11 @@ html_diff * HTMLDiffAttrDelete(html_writer * Writer, html_node * Parent, html_no
 
 html_diff * HTMLDiffAttrDeleteRest(html_writer * Writer, html_node * Parent, html_node * OldTags)
 {
+    if (Parent == &HTMLMemorylessPlaceholder || OldTags == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     do {
         HTMLDiffAttrDelete(Writer, Parent, OldTags);
     } while (OldTags = OldTags->Next);
@@ -641,6 +728,11 @@ html_diff * HTMLDiffAttrDeleteRest(html_writer * Writer, html_node * Parent, htm
 
 html_diff * HTMLDiffAttrSet(html_writer * Writer, html_node * Parent, html_node * NewTag)
 {
+    if (Parent == &HTMLMemorylessPlaceholder || NewTag == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     HTMLDiffAppend(Writer, (html_diff) {
         .Type = NewTag->Type->Class,
         .New = NewTag,
@@ -651,6 +743,11 @@ html_diff * HTMLDiffAttrSet(html_writer * Writer, html_node * Parent, html_node 
 
 html_diff * HTMLDiffAttrSetRest(html_writer * Writer, html_node * Parent, html_node * NewTags)
 {
+    if (Parent == &HTMLMemorylessPlaceholder || NewTags == &HTMLMemorylessPlaceholder)
+    {
+        return;
+    }
+
     do {
         HTMLDiffAttrSet(Writer, Parent, NewTags);
     } while (NewTags = NewTags->Next);
