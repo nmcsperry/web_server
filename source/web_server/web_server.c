@@ -40,14 +40,21 @@ typedef struct managed_html_session_pool
 
 managed_html_session_pool GlobalSessionPool;
 
+typedef struct html_client_interaction
+{
+    u32 NodeId;
+} html_client_interaction;
+
 typedef struct html_context
 {
     bool32 Valid;
+
     html_writer Writer;
     managed_html_session * Session;
-    i32 ClientId;
-    u32 PassCount;
-    u32 PassCountMax;
+    html_client_interaction Interaction;
+
+    bool32 PrePass;
+    bool32 Done;
 } html_context;
 
 void ManagedHTMLSessionsInit()
@@ -138,6 +145,22 @@ html_context HTMLStartManaged(web_server * Server, web_request * Request)
         return (html_context) { 0 };
     }
 
+    if (Str8Match(Request->RequestBody, Str8Lit("init"), 0))
+    {
+        Request->ResponseBehavior = ResponseBehavior_Respond;
+        Request->ResponseCode = 1;
+        Request->ResponseBody = Str8Lit("respond");
+
+        Session->Messages++;
+        Session->LastCommunication = UnixTimeSec();
+
+        return (html_context)
+        {
+            .Valid = true,
+            .Done = true
+        };
+    }
+
     memory_arena * Arena = 0;
     for (i32 I = 0; I < ManagedHTMLSessionCount * 2; I++)
     {
@@ -160,19 +183,20 @@ html_context HTMLStartManaged(web_server * Server, web_request * Request)
             .Valid = true,
             .Writer = HTMLWriterCreate(Arena, 0, 0),
             .Session = Session,
-            .PassCount = 0,
-            .PassCountMax = 0
+            .PrePass = false
         };
     }
     else
     {
+        html_writer Writer = HTMLWriterCreate(Arena, Session->LastDocument, Session->LastDocumentId);
+        Writer.Memoryless = true;
+
         return (html_context) {
             .Valid = true,
-            .Writer = HTMLWriterCreate(Arena, Session->LastDocument, Session->LastDocumentId),
+            .Writer = Writer,
             .Session = Session,
-            .ClientId = I32FromStr8(Request->RequestBody, 0),
-            .PassCount = 0,
-            .PassCountMax = 1
+            .Interaction = { I32FromStr8(Request->RequestBody, 0) },
+            .PrePass = true
         };
     }
 }
@@ -188,6 +212,11 @@ html_context HTMLStartPlain(web_server * Server, web_request * Request)
 
 void HTMLFulfillRequest(web_server * Server, html_context * Context, web_request * Request)
 {
+    if (Context->Done)
+    {
+        return;
+    }
+
     if (!Context->Valid)
     {
         Request->ResponseBehavior = ResponseBehavior_Respond;
@@ -195,10 +224,9 @@ void HTMLFulfillRequest(web_server * Server, html_context * Context, web_request
         Request->ResponseMimeType = &MimeType_Text;
         Request->ResponseBody = Str8Lit("Error");
 
+        Context->Done = true;
         return;
     }
-
-    Context->PassCount++;
 
     if (Context->Session)
     {
@@ -212,10 +240,13 @@ void HTMLFulfillRequest(web_server * Server, html_context * Context, web_request
         }
         else
         {
-            if (Context->PassCount == 1)
+            if (Context->PrePass == true)
             {
-                Context->ClientId = 0;
+                Context->Interaction = (html_client_interaction) { 0 };
                 HTMLWriterReset(&Context->Writer, Context->Session->LastDocumentId);
+                Context->Writer.Memoryless = false;
+
+                Context->PrePass = false;
                 return;
             }
 
@@ -235,6 +266,8 @@ void HTMLFulfillRequest(web_server * Server, html_context * Context, web_request
 
         Context->Session->LastDocument = Context->Writer.DocumentRoot;
         Context->Session->LastDocumentId = Context->Writer.LastId;
+
+        Context->Done = true;
     }
     else
     {
@@ -242,6 +275,8 @@ void HTMLFulfillRequest(web_server * Server, html_context * Context, web_request
         Request->ResponseCode = 200;
         Request->ResponseMimeType = &MimeType_HTML;
         Request->ResponseBody = Str8FromHTML(Server->ResponseArena, Context->Writer.DocumentRoot);
+
+        Context->Done = true;
     }
 }
 
@@ -268,7 +303,7 @@ str8 NotFoundPage(web_server * Server, memory_arena * Arena)
 bool32 HTMLElementWasClicked(html_context * Context)
 {
     html_node_ref Element = Context->Writer.TagStack[Context->Writer.StackIndex];
-    return Element.Id && Context->ClientId == Element.Id;
+    return Element.Id && Context->Interaction.NodeId == Element.Id;
 }
 
 bool32 HTMLButton(html_context * Context, str8 Text)
@@ -287,7 +322,9 @@ i32 GlobalCounter = 0;
 
 void MainPage(web_server * Server, web_request * Request)
 {
-    for (html_context Ctx = HTMLStartManaged(Server, Request); Ctx.PassCount <= Ctx.PassCountMax; HTMLFulfillRequest(Server, &Ctx, Request))
+    for (html_context Ctx = HTMLStartManaged(Server, Request);
+        !Ctx.Done;
+        HTMLFulfillRequest(Server, &Ctx, Request))
     {
         HTMLTag(&Ctx.Writer, HTMLTag_head)
         {
@@ -315,6 +352,7 @@ void MainPage(web_server * Server, web_request * Request)
 
                 HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_span, " %{i32}", GlobalCounter);
             }
+
             HTMLTag(&Ctx.Writer, HTMLTag_p)
             {
                 HTMLTag(&Ctx.Writer, HTMLTag_span)
@@ -323,6 +361,8 @@ void MainPage(web_server * Server, web_request * Request)
                     HTMLText(&Ctx.Writer, Str8Lit("This is a red paragraph."));
                 }
             }
+
+            HTMLSimpleTagFmt(&Ctx.Writer, HTMLTag_p, "Meta Info! Bytes used in arena: %{u32}", Ctx.Writer.Arena->Count);
 
             HTMLTagKey(&Ctx.Writer, HTMLTag_script, 7)
             {

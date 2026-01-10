@@ -2,11 +2,15 @@ const Socket = new WebSocket("ws://localhost");
 
 Socket.onopen = function ()
 {
-    Socket.send(0);
+    Socket.send("init");
 }
 
 Socket.onmessage = function(Event)
 {
+    if (Event.data == "respond")
+    {
+        return;
+    }
     const Deltas = JSON.parse(Event.data);
     for (let Index = 0; Index < Deltas.length; Index++)
     {
